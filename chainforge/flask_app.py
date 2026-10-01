@@ -664,6 +664,7 @@ def fetchEnvironAPIKeys():
         'MINIMAX_API_KEY': 'MiniMax',
         'OPENROUTER_API_KEY': 'OpenRouter',
         'OPENCODE_API_KEY': 'OpenCode_Zen',
+        'ECHO_API_KEY': 'Echo',
     }
     d = { alias: os.environ.get(key) for key, alias in keymap.items() }
     ret = jsonify(d)
@@ -863,21 +864,26 @@ def removeCustomProvider():
     return jsonify({'success': True})
 
 
-# Pre-register the bundled OpenCode Zen example provider, so it is available
-# in the ProviderRegistry (and hence the app UI) out of the box, without the
-# user needing to drop a custom provider script first. Soft-fails silently if
-# the script is missing or its dependencies are not installed.
+# Pre-register the bundled example providers, so they are available in the
+# ProviderRegistry (and hence the app UI) out of the box, without the user
+# needing to drop a custom provider script first. Soft-fails silently if a
+# script is missing or its dependencies are not installed.
+_BUNDLED_PROVIDERS = ('custom_provider_opencode.py', 'custom_provider_echo.py')
+
+
 def _load_bundled_providers():
-    example_path = os.path.join(os.path.dirname(__file__), 'examples', 'custom_provider_opencode.py')
-    if not os.path.isfile(example_path):
-        return
-    if ProviderRegistry.has('OpenCode Zen'):
-        return  # already registered (e.g. via a cached user script)
-    try:
-        with open(example_path, 'r', encoding='utf8') as f:
-            exec(f.read(), globals(), None)
-    except Exception:
-        pass
+    for example_fname in _BUNDLED_PROVIDERS:
+        example_path = os.path.join(os.path.dirname(__file__), 'examples', example_fname)
+        if not os.path.isfile(example_path):
+            continue
+        provider_name = 'OpenCode Zen' if 'opencode' in example_fname else 'Echo'
+        if ProviderRegistry.has(provider_name):
+            continue  # already registered (e.g. via a cached user script)
+        try:
+            with open(example_path, 'r', encoding='utf8') as f:
+                exec(f.read(), globals(), None)
+        except Exception:
+            pass
 
 
 _load_bundled_providers()
