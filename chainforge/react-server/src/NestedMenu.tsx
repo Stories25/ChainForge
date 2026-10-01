@@ -34,6 +34,8 @@ export const MenuTooltip = ({
 export type NestedMenuItemProps = ContextMenuItemOptions & {
   tooltip?: string;
   onTrash?: (closeMenu: () => void) => void;
+  /** When set, the item renders grayed out and cannot be clicked. */
+  disabled?: boolean;
 };
 
 export default function NestedMenu({
@@ -63,7 +65,7 @@ export default function NestedMenu({
     showChevron: boolean,
     idx: number,
   ) => {
-    if (!item.items && !item.onClick) {
+    if (!item.items && !item.onClick && !item.disabled) {
       if (item.key === "divider")
         // If the item is a divider, show it as a divider
         return <Menu.Divider key={`divider-${idx}`} />;
@@ -97,8 +99,18 @@ export default function NestedMenu({
             ) : null
           }
           className={item.className}
-          sx={item.sx}
+          disabled={item.disabled}
+          sx={
+            item.disabled
+              ? {
+                  opacity: 0.4,
+                  cursor: "default",
+                  "&:hover": { backgroundColor: "transparent" },
+                }
+              : item.sx
+          }
           onClick={(evt) => {
+            if (item.disabled) return;
             if (item.onClick) {
               item.onClick(evt);
 

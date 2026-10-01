@@ -30,21 +30,6 @@ import {
   JSONCompatible,
   LLMResponse,
 } from "./backend/typing";
-import {
-  BedrockSettings,
-  WebLLMSettings,
-  HuggingFaceSettings,
-  OpenRouterImageSettings,
-  OpenRouterSettings,
-  TogetherChatSettings,
-} from "./ModelSettingSchemas";
-import {
-  BEDROCK_PREFIX,
-  TOGETHER_PREFIX,
-  HUGGINGFACE_PREFIX,
-  OPENROUTER_IMAGE_PREFIX,
-  OPENROUTER_PREFIX,
-} from "./backend/models";
 import { StringLookup } from "./backend/cache";
 import { saveGlobalConfig } from "./backend/backend";
 import { ChunkMethodSpec } from "./ChunkMethodListComponent";
@@ -112,341 +97,32 @@ const refreshableOutputNodeTypes = new Set([
   "selectvars",
 ]);
 
-export const initLLMProviderMenu: (LLMSpec | LLMGroup)[] = [
-  {
-    group: "In-browser LLMs",
-    emoji: "🌐",
-    items: [...prefixedMenuItems(WebLLMSettings, "", "webllm", "🌐", 0.7)],
-  },
-  {
-    group: "OpenRouter",
-    emoji: "🔀",
-    items: [
-      ...prefixedMenuItems(
-        OpenRouterSettings,
-        OPENROUTER_PREFIX,
-        "openrouter",
-        "🔀",
-        1.0,
-      ),
-      ...prefixedMenuItems(
-        OpenRouterImageSettings,
-        OPENROUTER_IMAGE_PREFIX,
-        "openrouter-image",
-        "🖼",
-        0.0,
-      ),
-    ],
-  },
-  {
-    group: "OpenAI",
-    emoji: "🤖",
-    items: [
-      {
-        name: "GPT-6 Astra",
-        emoji: "🚀",
-        model: "gpt-6-astra",
-        base_model: "gpt-4",
-        temp: 1.0,
-      },
-      {
-        name: "GPT-5.6 Sol",
-        emoji: "☀️",
-        model: "gpt-5.6-sol",
-        base_model: "gpt-4",
-        temp: 1.0,
-      },
-      {
-        name: "GPT-5.6 Terra",
-        emoji: "🌍",
-        model: "gpt-5.6-terra",
-        base_model: "gpt-4",
-        temp: 1.0,
-      },
-      {
-        name: "GPT-5.6 Luna",
-        emoji: "🌙",
-        model: "gpt-5.6-luna",
-        base_model: "gpt-4",
-        temp: 1.0,
-      },
-      {
-        name: "GPT-5.4 Mini",
-        emoji: "🔬",
-        model: "gpt-5.4-mini",
-        base_model: "gpt-4",
-        temp: 1.0,
-      },
-      {
-        name: "GPT-5.4 Nano",
-        emoji: "🪲",
-        model: "gpt-5.4-nano",
-        base_model: "gpt-4",
-        temp: 1.0,
-      },
-      {
-        name: "GPT Image 2.5 Flare",
-        emoji: "🖼",
-        model: "gpt-image-2.5-flare",
-        base_model: "gpt-image-1", // key of the GPT Image settings form
-        temp: 0.0,
-      },
-      {
-        name: "GPT Image 2.5 Sunburst",
-        emoji: "🖼",
-        model: "gpt-image-2.5-sunburst",
-        base_model: "gpt-image-1",
-        temp: 0.0,
-      },
-      {
-        name: "GPT-4.1",
-        emoji: "🧑‍💻️",
-        model: "gpt-4.1",
-        base_model: "gpt-4",
-        temp: 1.0,
-      },
-      {
-        name: "GPT-4o-mini",
-        emoji: "🤖",
-        model: "gpt-4o-mini",
-        base_model: "gpt-4",
-        temp: 1.0,
-      },
-      {
-        name: "o3",
-        emoji: "⭕",
-        model: "o3",
-        base_model: "gpt-4",
-        temp: 1.0,
-      },
-      {
-        name: "GPT-3.5",
-        emoji: "🤖",
-        model: "gpt-3.5-turbo",
-        base_model: "gpt-3.5-turbo",
-        temp: 1.0,
-      }, // The base_model designates what settings form will be used, and must be unique.
-    ],
-  },
-  {
-    group: "Claude",
-    emoji: "📚",
-    items: [
-      {
-        name: "Claude Opus 5",
-        emoji: "📚",
-        model: "claude-opus-5",
-        base_model: "claude-v1",
-        temp: 1.0,
-      },
-      {
-        name: "Claude Sonnet 5",
-        emoji: "📘",
-        model: "claude-sonnet-5",
-        base_model: "claude-v1",
-        temp: 1.0,
-      },
-      {
-        name: "Claude Haiku 4.5",
-        emoji: "📗",
-        model: "claude-haiku-4-5",
-        base_model: "claude-v1",
-        temp: 1.0,
-      },
-      {
-        name: "Claude Fable 5.1",
-        emoji: "📕",
-        model: "claude-fable-5-1",
-        base_model: "claude-v1",
-        temp: 1.0,
-      },
-      {
-        name: "Claude Opus 4.8",
-        emoji: "📙",
-        model: "claude-opus-4-8",
-        base_model: "claude-v1",
-        temp: 1.0,
-      },
-      {
-        name: "Claude Sonnet 4.6",
-        emoji: "📓",
-        model: "claude-sonnet-4-6",
-        base_model: "claude-v1",
-        temp: 1.0,
-      },
-    ],
-  },
-  {
-    group: "Gemini",
-    emoji: "♊",
-    items: [
-      {
-        name: "Gemini 3.8 Flash",
-        emoji: "⚡️",
-        model: "gemini-3.8-flash",
-        base_model: "gemini-2.5",
-        temp: 0.7,
-      },
-      {
-        name: "Gemini 3.7 Flash",
-        emoji: "⚡️",
-        model: "gemini-3.7-flash",
-        base_model: "gemini-2.5",
-        temp: 0.7,
-      },
-      {
-        name: "Gemini 3.6 Flash",
-        emoji: "⚡️",
-        model: "gemini-3.6-flash",
-        base_model: "gemini-2.5",
-        temp: 0.7,
-      },
-      {
-        name: "Gemini 3.5 Flash-Lite",
-        emoji: "💨",
-        model: "gemini-3.5-flash-lite",
-        base_model: "gemini-2.5",
-        temp: 0.7,
-      },
-      {
-        name: "Gemini 3.1 Pro",
-        emoji: "♊",
-        model: "gemini-3.1-pro-preview",
-        base_model: "gemini-2.5",
-        temp: 0.7,
-      },
-      {
-        name: "Gemini 3.1 Flash Image",
-        emoji: "🍌",
-        model: "gemini-3.1-flash-image",
-        base_model: "gemini-image",
-        temp: 1.0,
-      },
-      {
-        name: "Gemini 3 Pro Image",
-        emoji: "🍌",
-        model: "gemini-3-pro-image",
-        base_model: "gemini-image",
-        temp: 1.0,
-      },
-    ],
-  },
-  {
-    group: "DeepSeek",
-    emoji: "🐋",
-    items: [
-      {
-        name: "DeepSeek Flash",
-        emoji: "🐋",
-        model: "deepseek-flash",
-        base_model: "deepseek",
-        temp: 1.0,
-      }, // The base_model designates what settings form will be used, and must be unique.
-      {
-        name: "DeepSeek V4 Pro",
-        emoji: "🐳",
-        model: "deepseek-v4-pro",
-        base_model: "deepseek",
-        temp: 1.0,
-      },
-    ],
-  },
-  {
-    group: "MiniMax",
-    emoji: "🔮",
-    items: [
-      {
-        name: "MiniMax M2.7",
-        emoji: "🔮",
-        model: "MiniMax-M2.7",
-        base_model: "minimax",
-        temp: 0.7,
-      },
-      {
-        name: "MiniMax M2.7 Highspeed",
-        emoji: "⚡",
-        model: "MiniMax-M2.7-highspeed",
-        base_model: "minimax",
-        temp: 0.7,
-      },
-    ],
-  },
-  {
-    group: "HuggingFace",
-    emoji: "🤗",
-    items: prefixedMenuItems(
-      HuggingFaceSettings,
-      HUGGINGFACE_PREFIX,
-      "hf",
-      "🤗",
-      1.0,
-    ),
-  },
-  {
-    name: "Azure OpenAI",
-    emoji: "🔷",
-    model: "azure-openai",
-    base_model: "azure-openai",
-    temp: 1.0,
-  },
-  {
-    group: "Bedrock",
-    emoji: "🪨",
-    items: prefixedMenuItems(
-      BedrockSettings,
-      BEDROCK_PREFIX,
-      "bedrock",
-      "🪨",
-      0.9,
-    ),
-  },
-];
+/**
+ * The provider menu is restricted to OpenCode Zen: it is the sole supported
+ * backbone. Its models come from the backend's ProviderRegistry at startup
+ * (via `setCustomProviders`), which appends them to the picker dynamically.
+ */
+export const initLLMProviderMenu: (LLMSpec | LLMGroup)[] = [];
 
 /**
- * Menu items for a provider whose models are typed in rather than enumerated:
- * one per suggested model in its settings form, so the menu and the form stay
- * in sync, each carrying the provider's prefix so ChainForge can route it back.
+ * Legacy providers, disabled now that OpenCode Zen is the only backbone.
+ * Shown grayed out (unclickable) in the model picker; flows that still use
+ * them keep their saved settings but cannot run.
  */
-function prefixedMenuItems(
-  settings: typeof OpenRouterSettings,
-  prefix: string,
-  base_model: string,
-  emoji: string,
-  temp: number,
-): LLMSpec[] {
-  const modelSpec = settings.schema.properties.model;
-  const names = modelSpec.shortname_map as Record<string, string>;
-  return (modelSpec.enum as string[]).map((model) => ({
-    name: names[model] ?? model,
-    emoji,
-    model: prefix + model,
-    base_model,
-    temp,
-  }));
-}
-
-initLLMProviderMenu.push({
-  group: "Together",
-  emoji: "🤝",
-  items: prefixedMenuItems(
-    TogetherChatSettings,
-    TOGETHER_PREFIX,
-    "together",
-    "🤝",
-    0.9,
-  ),
-});
-
-// Setup for when the app is running locally
-if (IS_RUNNING_LOCALLY) {
-  initLLMProviderMenu.push({
-    name: "Ollama",
-    emoji: "🦙",
-    model: "ollama",
-    base_model: "ollama",
-    temp: 1.0,
-  });
-}
+export const disabledLLMProviderMenu: { key: string; title: string }[] = [
+  { key: "webllm", title: "🌐 In-browser LLMs" },
+  { key: "openrouter", title: "🔀 OpenRouter" },
+  { key: "openai", title: "🤖 OpenAI" },
+  { key: "anthropic", title: "🎭 Anthropic (Claude)" },
+  { key: "google", title: "✨ Google AI (Gemini)" },
+  { key: "azure", title: "☁️ Azure OpenAI" },
+  { key: "hf", title: "🤗 Hugging Face" },
+  { key: "ollama", title: "🦙 Ollama" },
+  { key: "bedrock", title: "🌨️ Amazon Bedrock" },
+  { key: "together", title: "🤝 Together Chat" },
+  { key: "deepseek", title: "🐋 DeepSeek" },
+  { key: "minimax", title: "🪶 MiniMax" },
+];
 
 function flattenLLMGroup(group: LLMGroup): LLMSpec[] {
   return group.items.flatMap((item) =>

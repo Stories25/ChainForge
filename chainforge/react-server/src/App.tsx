@@ -198,19 +198,19 @@ const selector = (state: StoreHandles) => ({
 
 // The initial LLM to use when new flows are created, or upon first load
 const INITIAL_LLM = () => {
-  const qwenWebLLM = {
+  const gpt55 = {
     key: uuid(),
-    name: "Qwen2.5 0.5B",
-    emoji: "🌐",
-    model: NativeLLM.WebLLM_Qwen2_5_0_5B,
-    base_model: "webllm",
+    name: "GPT 5.5",
+    emoji: "⛏",
+    model: "__custom/OpenCode Zen/gpt-5.5",
+    base_model: "__custom/OpenCode Zen",
     temp: 0.7,
-    settings: getDefaultModelSettings("webllm"),
-    formData: getDefaultModelFormData("webllm"),
+    settings: {},
+    // The full settings schema (with all Zen models) arrives from the backend
+    // once the provider loads; these are safe pre-load defaults.
+    formData: { shortname: "GPT 5.5", model: "gpt-5.5" },
   } satisfies LLMSpec;
-  qwenWebLLM.formData.shortname = qwenWebLLM.name;
-  qwenWebLLM.formData.model = qwenWebLLM.model;
-  return qwenWebLLM;
+  return gpt55;
 };
 
 const nodeTypes = {

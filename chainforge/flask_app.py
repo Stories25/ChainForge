@@ -663,6 +663,7 @@ def fetchEnvironAPIKeys():
         'DEEPSEEK_API_KEY': 'DeepSeek',
         'MINIMAX_API_KEY': 'MiniMax',
         'OPENROUTER_API_KEY': 'OpenRouter',
+        'OPENCODE_API_KEY': 'OpenCode_Zen',
     }
     d = { alias: os.environ.get(key) for key, alias in keymap.items() }
     ret = jsonify(d)
@@ -860,6 +861,26 @@ def removeCustomProvider():
             os.remove(script_path)
 
     return jsonify({'success': True})
+
+
+# Pre-register the bundled OpenCode Zen example provider, so it is available
+# in the ProviderRegistry (and hence the app UI) out of the box, without the
+# user needing to drop a custom provider script first. Soft-fails silently if
+# the script is missing or its dependencies are not installed.
+def _load_bundled_providers():
+    example_path = os.path.join(os.path.dirname(__file__), 'examples', 'custom_provider_opencode.py')
+    if not os.path.isfile(example_path):
+        return
+    if ProviderRegistry.has('OpenCode Zen'):
+        return  # already registered (e.g. via a cached user script)
+    try:
+        with open(example_path, 'r', encoding='utf8') as f:
+            exec(f.read(), globals(), None)
+    except Exception:
+        pass
+
+
+_load_bundled_providers()
 
 
 @app.route('/app/callCustomProvider', methods=['POST'])

@@ -65,8 +65,66 @@ export const DatalistWidget = (props: WidgetProps) => {
   );
 };
 
+/**
+ * Custom widget for the OpenCode Zen model field: a provider-category dropdown
+ * that filters a priced model dropdown (categories + per-1M-token pricing are
+ * supplied by the provider's settings schema via `ui:options.categories`).
+ */
+const ZenModelPickerWidget = (props: WidgetProps) => {
+  const options = (props.uiSchema?.["ui:options"] ?? props.options ?? {}) as {
+    categories?: {
+      id: string;
+      label: string;
+      models: { id: string; label: string; price: string; flag?: string }[];
+    }[];
+  };
+  const categories = options.categories ?? [];
+
+  // Derive the active category from the current model value.
+  const catOf = (modelId: string | undefined) =>
+    categories.find((c) => c.models.some((m) => m.id === modelId));
+  const [catId, setCatId] = useState(
+    () => catOf(props.value)?.id ?? categories[0]?.id ?? "",
+  );
+  const activeCat = categories.find((c) => c.id === catId) ?? categories[0];
+
+  return (
+    <div>
+      <Select
+        label="Provider category"
+        description="Groups models by their upstream provider"
+        data={categories.map((c) => ({ value: c.id, label: c.label }))}
+        value={activeCat?.id ?? ""}
+        onChange={(newCat) => {
+          setCatId(newCat ?? "");
+          // Snap the model to the new category's first model, since the
+          // previous selection is no longer visible:
+          const cat = categories.find((c) => c.id === newCat);
+          if (cat && !cat.models.some((m) => m.id === props.value))
+            props.onChange(cat.models[0]?.id ?? undefined);
+        }}
+        size="sm"
+      />
+      <Select
+        label="Model"
+        data={(activeCat?.models ?? []).map((m) => ({
+          value: m.id,
+          label: `${m.label}${m.flag ? ` (${m.flag.toLowerCase()})` : ""} · ${m.price}`,
+        }))}
+        value={props.value ?? ""}
+        onChange={(newModel) => props.onChange(newModel ?? undefined)}
+        size="sm"
+        searchable
+        nothingFound="No models found"
+        mb="sm"
+      />
+    </div>
+  );
+};
+
 const widgets = {
   datalist: DatalistWidget,
+  zenModelPicker: ZenModelPickerWidget,
 };
 
 export interface ModelSettingsModalRef {

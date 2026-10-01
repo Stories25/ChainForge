@@ -28,20 +28,28 @@ import {
   BEDROCK_PREFIX,
   TOGETHER_PREFIX,
   HUGGINGFACE_PREFIX,
-  NativeLLM,
   OPENROUTER_IMAGE_PREFIX,
   OPENROUTER_PREFIX,
 } from "./backend/models";
-import useStore, { initLLMProviders, initLLMProviderMenu } from "./store";
+import useStore, {
+  initLLMProviderMenu,
+  disabledLLMProviderMenu,
+} from "./store";
 import { Dict, JSONCompatible, LLMGroup, LLMSpec } from "./backend/typing";
 import { ContextMenuItemOptions } from "mantine-contextmenu/dist/types";
 import { deepcopy, ensureUniqueName } from "./backend/utils";
 import NestedMenu, { NestedMenuItemProps } from "./NestedMenu";
 
 // The LLM(s) to include by default on a PromptNode whenever one is created.
-// Defaults to an in-browser Qwen 2.5 model.
+// Defaults to OpenCode Zen's GPT 5.5, the default model of the sole supported backbone.
 const DEFAULT_INIT_LLMS = [
-  initLLMProviders.find((m) => m.model === NativeLLM.WebLLM_Qwen2_5_0_5B)!,
+  {
+    name: "GPT 5.5",
+    emoji: "⛏",
+    model: "__custom/OpenCode Zen/gpt-5.5",
+    base_model: "__custom/OpenCode Zen",
+    temp: 0.7,
+  },
 ];
 
 // Base models whose model names carry a prefix, which tells ChainForge which
@@ -397,10 +405,16 @@ export const LLMListContainer = forwardRef<
       item.name = unique_name;
       item.formData = { shortname: unique_name };
 
-      // Strip any provider prefix (e.g. "together/") from the model name the form shows:
+      // Strip any provider prefix (e.g. "together/" or "__custom/OpenCode Zen/")
+      // from the model name the form shows:
       const prefix = MODEL_NAME_PREFIXES[item.base_model];
       if (prefix && item.model.startsWith(prefix))
         item.formData.model = item.model.substring(prefix.length);
+      else if (
+        item.base_model.startsWith("__custom/") &&
+        item.model.startsWith(item.base_model + "/")
+      )
+        item.formData.model = item.model.substring(item.base_model.length + 1);
       else item.formData.model = item.model;
 
       // Ollama models use a different format for the model name, that we need to carry over:
@@ -491,6 +505,17 @@ export const LLMListContainer = forwardRef<
       }
     };
     const res = initLLMProviderMenu.map((i) => convert(i));
+
+    // Legacy providers, disabled now that OpenCode Zen is the sole backbone.
+    // Rendered grayed out and unclickable at the bottom of the picker.
+    disabledLLMProviderMenu.forEach((d) =>
+      res.push({
+        key: d.key,
+        title: d.title,
+        disabled: true,
+        onClick: undefined,
+      } as NestedMenuItemProps),
+    );
 
     for (const item of AvailableLLMs) {
       if (initModels.has(item.base_model)) {
