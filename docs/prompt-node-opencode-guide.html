@@ -199,6 +199,8 @@
 
     <div class="callout">Try it: edit the Text-node items above or switch prompt variants. The filled preview updates live, exactly like ChainForge's <code>TemplateHighlightTextarea</code> highlighting (<code>{var}</code> in orange = variable, green = filled value).</div>
 
+    <div class="callout warn"><b>Special variable <code>{system_prompt}</code>:</b> if a template variable named <code>system_prompt</code> is present (e.g. fed by a Text node), its value <b>overrides</b> the <code>system_message</code> defined in the model settings dialogue for that execution. Each Cartesian-product cell can thus carry its own system prompt — perfect for A/B-testing personas or prompt-injection guardrails side-by-side. When absent, the settings-defined system message applies. The variable still gets its own input handle, like any other.</div>
+
     <h3>The mechanics, step by step</h3>
     <div class="cols2">
       <div class="card">
@@ -208,6 +210,7 @@
           <li><b>Handles appear/disappear</b> automatically — one input handle per variable. Missing connections block the run ("Missing inputs to one or more template variables").</li>
           <li><b>Variants:</b> the <i>＋ Add prompt variant</i> button adds a sibling prompt. Each variant is an independent prompt; <code>promptText</code> is stored as an <b>array</b>.</li>
           <li><b>Execution:</b> before querying, <code>pullInputData()</code> resolves every variable. When multiple variants exist, the node packs all of them into a synthetic variable (<code>var_for_prompt_templates</code>) and treats the template as <code>{prompt}</code>.</li>
+          <li><b>Special variable <code>{system_prompt}</code>:</b> parsed like any template var, but instead of being interpolated into the prompt body, its connected value <b>overrides</b> the settings-defined <code>system_message</code> (per execution, per row). Combined with the cartesian product, every response row can run under a different system prompt.</li>
         </ul>
       </div>
       <div class="card">
@@ -368,7 +371,16 @@
           <div class="field">
             <label>system_message</label>
             <textarea id="sysMsg" oninput="sysCount()">You are a concise assistant. Answer in at most 3 sentences.</textarea>
-            <div class="help"><span class="rangeval" id="sysLen">68</span> chars · Sent as the system-role message ahead of the user prompt on <code>/v1/chat/completions</code>. Leave empty to send no system message. Template variables like <code>{item}</code> are <b>not</b> resolved here — use the Prompt-node canvas for templating.</div>
+            <div class="help"><span class="rangeval" id="sysLen">68</span> chars · Sent as the system-role message ahead of the user prompt on <code>/v1/chat/completions</code>. Leave empty to send no system message. <b>Overridden at run time</b> when a <code>{system_prompt}</code> template variable is connected to the node. Template variables are not resolved in this field otherwise.</div>
+          </div>
+          <div class="field">
+            <label>reasoning_effort</label>
+            <select>
+              <option>low</option>
+              <option selected>medium</option>
+              <option>high</option>
+            </select>
+            <div class="help">How much thinking the model should do before answering. Low = fastest and cheapest; high = deepest reasoning. Sent through to the Zen gateway for models that support it; ignored gracefully by those that don't.</div>
           </div>
           <div class="field">
             <label>temperature <span class="rangeval" id="tempVal">0.7</span></label>
@@ -461,7 +473,7 @@
           <div class="removed">top_p (not in schema — only temperature + max_tokens are exposed)</div>
           <div class="removed">Dall-E / GPT-Image / WebLLM sub-forms (image &amp; in-browser providers disabled with the rest)</div>
           <p style="margin:14px 0 6px;font-size:13px;color:var(--txt-dim)">Fields kept / newly introduced:</p>
-          <div class="added">✓ temperature (0–2, default 0.7, range widget)<br>✓ max_tokens (1–65536, default 4096, range widget)<br>✓ system_message — back by popular demand: sent as a system-role message, not a raw kwarg<br>✓ provider category + model — separate dropdowns; category groups the Zen catalogue by upstream provider (openai, anthropic, google, xai, moonshot, …)<br>✓ shortname — response-table nickname (unchanged UI affordance)<br>✓ API key handling via OPENCODE_API_KEY env / .env</div>
+          <div class="added">✓ temperature (0–2, default 0.7, range widget)<br>✓ max_tokens (1–65536, default 4096, range widget)<br>✓ system_message — sent as a system-role message; overridable per execution via a special <code>{system_prompt}</code> template variable<br>✓ reasoning_effort — low / medium / high selector<br>✓ provider category + model — separate dropdowns; category groups the Zen catalogue by upstream provider (openai, anthropic, google, xai, moonshot, …)<br>✓ shortname — response-table nickname (unchanged UI affordance)<br>✓ API key handling via OPENCODE_API_KEY env / .env</div>
           <div class="callout">Rationale: <code>ModelSettingsModal</code> renders <i>only</i> what the provider's <code>settings_schema</code> declares. By trimming the schema, the old OpenAI/Anthropic/… settings fields vanish automatically — zero modal code changes needed.</div>
         </div>
         <div class="mfoot"><button class="btn primary">Done</button></div>
