@@ -121,6 +121,33 @@ const getRootPromptFor = (
   else return `{${varNameForRootTemplate}}`;
 };
 
+/**
+ * Special template variable: {system_prompt}. When connected to an input (e.g. a Text
+ * node), its value overrides the model settings' system message (system_msg) for that
+ * execution — including per row of the cartesian product.
+ *
+ * We implement it by rewriting it to the internal 'settings var' form {=system_msg},
+ * which the template engine treats specially: it vanishes from the prompt body (instead
+ * of being interpolated) and is extracted per-prompt-permutation as a setting that
+ * overrides the model's system_msg. See template.ts (extractTemplateVarSpans,
+ * has_unfilled_settings_var) and extractSettingsVars in utils.ts.
+ */
+const SYSTEM_PROMPT_VAR = "system_prompt";
+const SYSTEM_PROMPT_SETTINGS_VAR = "=system_msg";
+const rewriteSystemPromptVar = (t: string | string[]): string | string[] =>
+  Array.isArray(t)
+    ? t.map((p) => rewriteSystemPromptVar(p) as string)
+    : t.replace(/\{\s*system_prompt\s*\}/g, `{${SYSTEM_PROMPT_SETTINGS_VAR}}`);
+const hoistSystemPromptVar = (
+  vars: Dict<string[] | TemplateVarInfo[] | (string | TemplateVarInfo)[]>,
+) => {
+  if (vars[SYSTEM_PROMPT_VAR] !== undefined) {
+    vars[SYSTEM_PROMPT_SETTINGS_VAR] = vars[SYSTEM_PROMPT_VAR];
+    delete vars[SYSTEM_PROMPT_VAR];
+  }
+  return vars;
+};
+
 const promptVariantLabelStyle = {
   input: {
     border: "0",
@@ -733,27 +760,32 @@ const PromptNode: React.FC<PromptNodeProps> = ({
       const prompts =
         typeof promptText === "string" ? [promptText] : promptText;
 
-      Promise.all(prompts.map((p) => generatePrompts(p, pulled_vars))).then(
-        (results) => {
-          // Handle all the results here
-          const all_concrete_prompts = results.flatMap((ps) =>
-            ps.map((p: PromptTemplate) => {
-              // Find the image UID in the fill_history
-              const imageUid = Object.entries(p.fill_history).find(
-                ([_, value]) => typeof value === "object" && value?.image,
-              )?.[1]?.image;
+      Promise.all(
+        prompts.map((p) =>
+          generatePrompts(
+            rewriteSystemPromptVar(p) as string,
+            hoistSystemPromptVar({ ...pulled_vars }),
+          ),
+        ),
+      ).then((results) => {
+        // Handle all the results here
+        const all_concrete_prompts = results.flatMap((ps) =>
+          ps.map((p: PromptTemplate) => {
+            // Find the image UID in the fill_history
+            const imageUid = Object.entries(p.fill_history).find(
+              ([_, value]) => typeof value === "object" && value?.image,
+            )?.[1]?.image;
 
-              return new PromptInfo(
-                p.toString(),
-                extractSettingsVars(p.fill_history),
-                undefined,
-                imageUid,
-              );
-            }),
-          );
-          setPromptPreviews(all_concrete_prompts);
-        },
-      );
+            return new PromptInfo(
+              p.toString(),
+              extractSettingsVars(p.fill_history),
+              undefined,
+              imageUid,
+            );
+          }),
+        );
+        setPromptPreviews(all_concrete_prompts);
+      });
 
       pullInputChats();
     } catch (err) {
@@ -801,6 +833,7 @@ const PromptNode: React.FC<PromptNodeProps> = ({
     let pulled_vars = {};
     try {
       pulled_vars = pullInputData(templateVars, id);
+      hoistSystemPromptVar(pulled_vars);
     } catch (err) {
       setRunTooltip("Error: Duplicate variables detected.");
       console.error(err);
@@ -826,7 +859,7 @@ const PromptNode: React.FC<PromptNodeProps> = ({
 
     // Fetch response counts from backend
     fetchResponseCounts(
-      promptText,
+      rewriteSystemPromptVar(promptText),
       pulled_vars,
       _llmItemsCurrState,
       chat_hist_by_llm,
@@ -986,6 +1019,10 @@ Soft failing by replacing undefined with empty strings.`,
       // Try to pull inputs
       pulled_data = pullInputData(templateVars, id);
 
+      // Special var: hoist {system_prompt} into the settings-var form, so it
+      // overrides the model's system_msg instead of being interpolated into the prompt body.
+      hoistSystemPromptVar(pulled_data);
+
       // Add a special new variable for the root prompt template(s)
       var_for_prompt_templates = ensureUniqueName(
         "prompt",
@@ -997,7 +1034,7 @@ Soft failing by replacing undefined with empty strings.`,
           (prompt, idx) => {
             const label = promptVariantLabel[idx];
             const info: TemplateVarInfo = {
-              text: prompt,
+              text: rewriteSystemPromptVar(prompt) as string,
               fill_history: {
                 // We pass the label alongside the prompt text, for easier display and comparison later.
                 [var_for_prompt_templates + " [label]"]: label,
@@ -1012,7 +1049,9 @@ Soft failing by replacing undefined with empty strings.`,
       return; // early exit
     }
 
-    const prompt_template = promptText;
+    // Rewrite {system_prompt} to the settings-var form, so it overrides the
+    // model's system_msg rather than being interpolated into the prompt body:
+    const prompt_template = rewriteSystemPromptVar(promptText);
 
     // Whether to continue with only the prior LLMs, for each value in vars dict
     if (node_type !== "chat" && showContToggle && contWithPriorLLMs) {
