@@ -201,6 +201,8 @@ export type CustomLLMProviderSpec = {
   settings_schema?: {
     settings: Dict<Dict<JSONCompatible>>;
     ui: Dict<Dict<JSONCompatible>>;
+    /** Environment variable (or .env key) holding this provider's API key. */
+    api_key_env?: string;
   };
   category?: string;
 };
@@ -219,6 +221,8 @@ export interface ModelSettingsDict {
   };
   uiSchema: Dict<JSONCompatible>;
   postprocessors: Dict<(val: string | number | boolean) => any>;
+  /** Env var holding the API key, if the provider declared one. */
+  api_key_env?: string;
 }
 
 /** Standard properties that every LLM response object must have. */

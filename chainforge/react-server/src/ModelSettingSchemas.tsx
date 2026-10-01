@@ -2553,6 +2553,10 @@ export const setCustomProvider = (
       ...compiled_schema.uiSchema,
       ...settings_schema.ui,
     };
+    // The env var holding the provider's API key, if declared. The settings
+    // modal uses this to warn when the key is missing (mock C state).
+    if (settings_schema.api_key_env)
+      compiled_schema.api_key_env = settings_schema.api_key_env;
   }
 
   // Check for a default temperature

@@ -12,7 +12,7 @@ import Picker from "@emoji-mart/react";
 // react-jsonschema-form
 import validator from "@rjsf/validator-ajv8";
 import Form from "@rjsf/core";
-import { WidgetProps } from "@rjsf/utils";
+import { WidgetProps, FieldTemplateProps } from "@rjsf/utils";
 import {
   ModelSettings,
   getDefaultModelFormData,
@@ -26,6 +26,7 @@ import {
 } from "./backend/typing";
 import { IconHeart } from "@tabler/icons-react";
 import { APP_IS_RUNNING_LOCALLY } from "./backend/utils";
+import { fetchEnvironAPIKeys } from "./backend/backend";
 
 const IS_RUNNING_LOCALLY = APP_IS_RUNNING_LOCALLY();
 
@@ -127,6 +128,48 @@ const widgets = {
   zenModelPicker: ZenModelPickerWidget,
 };
 
+/**
+ * Field template matching the mock design: each setting renders as a block of
+ * [label → control → help text], with the help text drawn from the schema's
+ * description. Fields whose widget is "hidden" render nothing.
+ */
+const MockStyleFieldTemplate = (props: FieldTemplateProps) => {
+  const { id, label, help, required, children, displayLabel, schema, errors } =
+    props;
+  if (schema?.["ui:widget"] === "hidden" || !displayLabel)
+    return <>{children}</>;
+  return (
+    <div style={{ marginBottom: "16px" }}>
+      <label
+        htmlFor={id}
+        style={{
+          display: "block",
+          fontWeight: 600,
+          fontSize: "13px",
+          marginBottom: "6px",
+        }}
+      >
+        {label}
+        {required && <span style={{ color: "#e46161" }}> *</span>}
+      </label>
+      {children}
+      {help && (
+        <div
+          style={{
+            fontSize: "12px",
+            color: "var(--tooltip-text-color, #aaa)",
+            marginTop: "4px",
+            opacity: 0.85,
+          }}
+        >
+          {help}
+        </div>
+      )}
+      {errors}
+    </div>
+  );
+};
+
 export interface ModelSettingsModalRef {
   trigger: () => void;
 }
@@ -168,6 +211,39 @@ const ModelSettingsModal = forwardRef<
   // Totally necessary emoji picker
   const [modelEmoji, setModelEmoji] = useState("");
   const [emojiPickerOpen, setEmojiPickerOpen] = useState<boolean>(false);
+
+  // Name of the env var holding the provider's API key, if the key is missing
+  // from the environment. Null when the key is present (or unknown).
+  const [missingAPIKeyEnv, setMissingAPIKeyEnv] = useState<string | null>(null);
+
+  // Check whether the provider's declared API key is set in the environment
+  // (mirrors the missing-API-key mock state). Only possible when running
+  // locally, where the Flask server can read the environment. The endpoint
+  // returns keys keyed by provider alias (e.g. "OpenCode_Zen"); we accept
+  // either the alias or the raw env-var name.
+  useEffect(() => {
+    let cancelled = false;
+    setMissingAPIKeyEnv(null);
+    if (!IS_RUNNING_LOCALLY || !model?.base_model) return;
+    const settingsSpec = ModelSettings[model.base_model];
+    const envVar = settingsSpec?.api_key_env;
+    if (!envVar) return;
+    const alias = settingsSpec.fullName
+      .replace(" (custom provider)", "")
+      .replace(/\s+/g, "_");
+    fetchEnvironAPIKeys()
+      .then((keys) => {
+        const hasKey =
+          (alias in keys && keys[alias]) || (envVar in keys && keys[envVar]);
+        if (!cancelled && !hasKey) setMissingAPIKeyEnv(envVar);
+      })
+      .catch(() => {
+        /* Can't tell; assume the key is there and let run-time surface errors. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [model]);
 
   useEffect(() => {
     if (model && model.base_model) {
@@ -359,38 +435,38 @@ const ModelSettingsModal = forwardRef<
           </Modal.Title>
 
           <Flex justify="right">
-            {IS_RUNNING_LOCALLY && (
-              <Tooltip
-                label="Save as a favorite. Uses the nickname, so make sure it's good."
-                withArrow
-                multiline
-                maw="220px"
-              >
-                <Button
-                  className="favorite-icon"
-                  fw="normal"
-                  mr="md"
-                  variant="outline"
-                  size="xs"
-                  color="gray"
-                  rightIcon={<IconHeart size="12pt" />}
-                  onClick={() => {
-                    // Submit the form and make the saved model settings a favorite
-                    onClickSubmit(true);
-                  }}
-                >
-                  Favorite
-                </Button>
-              </Tooltip>
-            )}
             <Modal.CloseButton />
           </Flex>
         </Modal.Header>
         <Modal.Body>
+          {missingAPIKeyEnv && (
+            <div
+              style={{
+                background: "rgba(228,97,97,0.12)",
+                border: "1px solid #e46161",
+                borderRadius: "8px",
+                padding: "10px 14px",
+                fontSize: "13px",
+                color: "#e46161",
+                marginBottom: "16px",
+              }}
+            >
+              {"⚠ "}
+              <b>{missingAPIKeyEnv}</b>
+              {" is not set. Get a key from the provider and add it to your "}
+              <b>environment</b>
+              {" or a project-root "}
+              <code>.env</code>
+              {
+                " file, then restart ChainForge. Submit is disabled until the key is found; opening settings for the provider after saving the key will clear this warning."
+              }
+            </div>
+          )}
           <Form
             schema={schema}
             uiSchema={uiSchema}
             widgets={widgets} // Custom UI widgets
+            templates={{ FieldTemplate: MockStyleFieldTemplate }}
             formData={formData}
             // // @ts-expect-error This is literally the example code from react-json-schema; no idea why it wouldn't typecheck correctly.
             validator={validator}
@@ -400,14 +476,39 @@ const ModelSettingsModal = forwardRef<
             onSubmit={onSubmit}
             style={{ width: "100%" }}
           >
-            <Button
-              title="Submit"
-              onClick={() => onClickSubmit(false)}
-              style={{ float: "right", marginRight: "30px" }}
-            >
-              Submit
-            </Button>
-            <div style={{ height: "50px" }}></div>
+            <Flex justify="right" gap="sm" style={{ marginTop: "8px" }}>
+              {IS_RUNNING_LOCALLY && (
+                <Tooltip
+                  label="Save as a favorite. Uses the nickname, so make sure it's good."
+                  withArrow
+                  multiline
+                  maw="220px"
+                >
+                  <Button
+                    title="Favorite"
+                    fw="normal"
+                    variant="outline"
+                    size="xs"
+                    color="gray"
+                    disabled={!!missingAPIKeyEnv}
+                    rightIcon={<IconHeart size="12pt" />}
+                    onClick={() => {
+                      // Submit the form and make the saved model settings a favorite
+                      onClickSubmit(true);
+                    }}
+                  >
+                    Favorite
+                  </Button>
+                </Tooltip>
+              )}
+              <Button
+                title="Submit"
+                disabled={!!missingAPIKeyEnv}
+                onClick={() => onClickSubmit(false)}
+              >
+                Submit
+              </Button>
+            </Flex>
           </Form>
         </Modal.Body>
       </Modal.Content>

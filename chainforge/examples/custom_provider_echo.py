@@ -91,6 +91,9 @@ ECHO_MODELS = ["echo"]
             "temperature": {"ui:widget": "range"},
             "max_tokens": {"ui:widget": "range"},
         },
+        # Tells the settings modal which env var / .env key holds the API key,
+        # so it can warn when the key is missing (and disable submit).
+        "api_key_env": "ECHO_API_KEY",
     },
 )
 def EchoCompletion(

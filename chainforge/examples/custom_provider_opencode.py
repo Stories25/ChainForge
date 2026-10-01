@@ -249,6 +249,9 @@ OPENCODE_SETTINGS_SCHEMA = {
         # a provider-category dropdown that filters a priced model dropdown.
         "model": _zen_picker_ui(),
     },
+    # Tells the settings modal which env var / .env key holds the API key,
+    # so it can warn when the key is missing (and disable submit).
+    "api_key_env": "OPENCODE_API_KEY",
 }
 
 
