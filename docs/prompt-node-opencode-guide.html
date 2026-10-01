@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChainForge · Prompt Node, Text Node & OpenCode Provider Guide</title>
+<style>
+  :root{
+    --bg:#181a1f; --bg2:#1f222a; --panel:#242732; --panel2:#2b2f3c;
+    --line:#3a3f4f; --txt:#dfe3ec; --txt-dim:#9aa3b5; --accent:#6ea8ff;
+    --accent2:#7ee2a8; --warn:#ffb454; --err:#ff6b6b; --purple:#b39df5;
+    --opencode:#7ee2a8; --disabled:#555b6b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--accent)}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 80px}
+  header.top{padding:28px 0 6px}
+  header.top h1{margin:0;font-size:24px;letter-spacing:.2px}
+  header.top p{color:var(--txt-dim);margin:8px 0 0;max-width:860px}
+  .pill{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.4px;vertical-align:middle}
+  .pill.green{background:rgba(126,226,168,.14);color:var(--opencode);border:1px solid rgba(126,226,168,.4)}
+  .pill.purple{background:rgba(179,157,245,.14);color:var(--purple);border:1px solid rgba(179,157,245,.4)}
+  .pill.blue{background:rgba(110,168,255,.14);color:var(--accent);border:1px solid rgba(110,168,255,.4)}
+
+  /* Tabs */
+  .tabs{display:flex;gap:4px;margin:26px 0 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .tab{padding:10px 18px;cursor:pointer;color:var(--txt-dim);border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;font-weight:600;font-size:13px;user-select:none}
+  .tab:hover{color:var(--txt)}
+  .tab.active{background:var(--panel2);color:var(--txt);border-color:var(--line)}
+  .tabpane{display:none;padding-top:22px}
+  .tabpane.active{display:block}
+  section{margin-bottom:34px}
+  h2{font-size:18px;margin:0 0 6px}
+  h3{font-size:15px;margin:20px 0 6px}
+  p.lead{color:var(--txt-dim);margin:4px 0 14px;max-width:900px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  code, kbd{background:#12141a;border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:#cdd6e8}
+  pre{background:#12141a;border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto;font-family:Consolas,monospace;font-size:12.5px;line-height:1.5}
+  pre .c{color:#6a7386}pre .k{color:#b39df5}pre .s{color:#7ee2a8}pre .n{color:#ffb454}
+
+  /* ---- Canvas / node mock ---- */
+  .canvas{background:radial-gradient(circle at 30% 20%, #232735 0%, #191c24 70%);border:1px solid var(--line);border-radius:10px;padding:34px;position:relative;overflow:auto;min-height:340px}
+  .nodeline{display:flex;align-items:center;gap:0;flex-wrap:wrap}
+  .node{background:var(--panel2);border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.35);min-width:210px}
+  .node .nhead{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);font-weight:600;font-size:12.5px}
+  .node .nbody{padding:10px 12px}
+  .handle{width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid #12141a;position:absolute}
+  .handle.in{left:-6px}.handle.out{right:-6px}
+  .wire{height:2px;flex:0 0 90px;min-width:60px;background:linear-gradient(90deg,var(--accent),var(--accent2));position:relative;align-self:center}
+  .wire::after{content:"";position:absolute;right:-2px;top:-4px;border:5px solid transparent;border-left:7px solid var(--accent2)}
+
+  /* Text node fields */
+  .tf-row{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .tf-row input{flex:1;background:#12141a;border:1px solid var(--line);border-radius:6px;color:var(--txt);padding:6px 9px;font-size:13px}
+  .tf-row .dot{width:9px;height:9px;border-radius:50%;background:var(--accent2)}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600}
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:rgba(110,168,255,.16);border-color:var(--accent);color:var(--accent)}
+  .btn.ghost{background:transparent}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+
+  /* Prompt preview */
+  .ptext{background:#12141a;border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-family:Consolas,monospace;font-size:12.5px;white-space:pre-wrap;word-break:break-word}
+  .vvar{color:var(--warn);font-weight:700;background:rgba(255,180,84,.08);border-radius:3px;padding:0 2px;cursor:pointer;border-bottom:1px dashed var(--warn)}
+  .vfill{color:var(--accent2);background:rgba(126,226,168,.1);border-radius:3px;padding:0 2px}
+  .vtab{display:inline-block;padding:3px 10px;border-radius:6px 6px 0 0;border:1px solid var(--line);border-bottom:none;cursor:pointer;font-size:12px;color:var(--txt-dim);margin-right:2px}
+  .vtab.active{background:#12141a;color:var(--txt)}
+  .legend{color:var(--txt-dim);font-size:12px;margin-top:8px}
+
+  /* Cartesian grid */
+  table.grid{border-collapse:collapse;width:100%;font-size:12.5px}
+  table.grid th,table.grid td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  table.grid th{background:var(--panel2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt-dim)}
+  table.grid td.resp{font-family:Consolas,monospace;color:#cdd6e8;max-width:280px}
+  .chip{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;margin:1px 2px 1px 0;background:var(--panel2);border:1px solid var(--line)}
+  .chip.model{background:rgba(179,157,245,.12);border-color:rgba(179,157,245,.4);color:var(--purple)}
+  .chip.prompt{background:rgba(255,180,84,.1);border-color:rgba(255,180,84,.4);color:var(--warn)}
+  .chip.item{background:rgba(126,226,168,.1);border-color:rgba(126,226,168,.4);color:var(--opencode)}
+
+  /* ---- Settings modal mocks ---- */
+  .mockwrap{display:flex;justify-content:center;padding:8px 0}
+  .modal{background:#262a35;border:1px solid #464c60;border-radius:12px;box-shadow:0 24px 60px rgba(0,0,0,.5);width:560px;max-width:100%}
+  .modal .mhead{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #3a3f4f}
+  .modal .mtitle{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
+  .modal .mbody{padding:16px 22px 20px;max-height:520px;overflow:auto}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;font-weight:600;color:#b7bfd0;margin-bottom:5px}
+  .field .help{font-size:11px;color:var(--txt-dim);margin-top:4px}
+  .field input[type=text],.field input[type=password],.field select,.field textarea{width:100%;background:#12141a;border:1px solid var(--line);border-radius:6px;color:var(--txt);padding:7px 10px;font-size:13px;font-family:inherit}
+  .field textarea{resize:vertical;min-height:64px;font-family:Consolas,monospace}
+  .price{font-family:Consolas,monospace;color:var(--opencode);font-size:11px}
+  .dep{color:var(--warn);font-size:10px;border:1px solid rgba(255,180,84,.4);border-radius:8px;padding:0 6px;margin-left:6px}
+  .freetag{color:var(--opencode);font-size:10px;border:1px solid rgba(126,226,168,.4);border-radius:8px;padding:0 6px;margin-left:6px}
+  .field select:disabled{color:var(--disabled)}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .rangeval{font-family:Consolas,monospace;color:var(--accent);font-size:12px}
+  .switch{position:relative;width:36px;height:20px;background:#12141a;border:1px solid var(--line);border-radius:20px;cursor:pointer}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--disabled);transition:.15s}
+  .switch.on{background:rgba(126,226,168,.2);border-color:var(--opencode)}
+  .switch.on::after{left:18px;background:var(--opencode)}
+  .mfoot{padding:10px 16px;border-top:1px solid #3a3f4f;display:flex;justify-content:flex-end;gap:8px}
+  .modal-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+  .modal-tabs .btn.sel{border-color:var(--accent);color:var(--accent);background:rgba(110,168,255,.1)}
+  .removed{border:1px dashed rgba(255,107,107,.5);background:rgba(255,107,107,.05);border-radius:8px;padding:10px 12px;margin:8px 0;color:#e0a2a2;font-size:12.5px;text-decoration:line-through}
+  .added{border:1px dashed rgba(126,226,168,.5);background:rgba(126,226,168,.05);border-radius:8px;padding:10px 12px;margin:8px 0;color:#bfe9cf;font-size:12.5px}
+  .err{border:1px solid rgba(255,107,107,.6);background:rgba(255,107,107,.08);color:#ffb3b3;border-radius:6px;padding:8px 10px;font-size:12.5px}
+  .badge{font-size:10px;padding:1px 7px;border-radius:8px;font-weight:700;letter-spacing:.4px}
+  .badge.new{background:rgba(126,226,168,.15);color:var(--opencode);border:1px solid rgba(126,226,168,.4)}
+  .badge.rm{background:rgba(255,107,107,.12);color:var(--err);border:1px solid rgba(255,107,107,.4)}
+  .badge.on{background:rgba(126,226,168,.15);color:var(--opencode);border:1px solid rgba(126,226,168,.4)}
+  .badge.off{background:rgba(85,91,107,.2);color:var(--disabled);border:1px solid var(--disabled)}
+
+  /* Provider list (LLM list component mock) */
+  .provlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+  .prov{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:13px}
+  .prov .em{font-size:17px;width:24px;text-align:center}
+  .prov.disabled{opacity:.45;filter:grayscale(.9)}
+  .prov.disabled .em::after{content:"⛔";font-size:10px;position:relative;left:14px;top:-6px}
+  .prov.enabled{border-color:rgba(126,226,168,.5);background:rgba(126,226,168,.06)}
+  .prov .grow{flex:1}
+  .dropdown{position:relative}
+  .dropdown .menu{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#12141a;border:1px solid var(--line);border-radius:8px;z-index:20;max-height:230px;overflow:auto;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+  .dropdown .menu div{padding:7px 12px;font-size:12.5px;cursor:pointer;display:flex;justify-content:space-between}
+  .dropdown .menu div:hover{background:var(--panel2)}
+  .dropdown .menu .free{color:var(--opencode);font-size:10px}
+  .callout{border-left:3px solid var(--accent);background:var(--panel2);border-radius:0 8px 8px 0;padding:10px 14px;margin:10px 0;font-size:13px;color:#c8cfdd}
+  .callout.green{border-color:var(--opencode)}
+  .callout.warn{border-color:var(--warn)}
+  .cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:900px){.cols2{grid-template-columns:1fr}}
+  ul.tight{margin:6px 0;padding-left:20px;color:#c8cfdd}
+  ul.tight li{margin:4px 0}
+  .flowarrow{color:var(--txt-dim);font-size:11px;text-align:center;margin:2px 0}
+  small.src{color:#5f6779;font-size:11px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>ChainForge · Prompt Node, Text Node & the OpenCode Backbone</h1>
+  <p>An interactive guide to how the <span class="pill purple">Prompt node</span> and <span class="pill blue">Text node</span> work, how multiple model providers are supported, and mock variations of the Prompt-node configuration dialogue after replacing the backbone with <span class="pill green">OpenCode Zen</span>.</p>
+</header>
+
+<nav class="tabs" id="tabs">
+  <div class="tab active" data-t="t1">1 · Prompt & Text Nodes</div>
+  <div class="tab" data-t="t2">2 · Multi-Provider Support</div>
+  <div class="tab" data-t="t3">3 · Multiple Prompts → One Node</div>
+  <div class="tab" data-t="t4">4 · Settings Dialogue Mocks (OpenCode)</div>
+  <div class="tab" data-t="t5">5 · Zen Model Pricing</div>
+</nav>
+
+<!-- ================= TAB 1 ================= -->
+<div class="tabpane active" id="t1">
+
+  <section>
+    <h2>How the Prompt node and Text node work</h2>
+    <p class="lead">The <b>Prompt node</b> (<code>src/PromptNode.tsx</code>) holds one or more prompt <i>variants</i>. Any text wrapped in <code>{curly braces}</code> inside the prompt becomes a <b>template variable</b> — and each variable automatically gets its own <b>input handle</b> on the left edge of the node. The <b>Text node</b> (<code>src/TextFieldsNode.tsx</code>) is a list of editable strings; connect it to a variable's handle to supply values.</p>
+
+    <div class="canvas">
+      <div class="nodeline">
+        <div class="node" style="position:relative">
+          <div class="nhead">📄 Text</div>
+          <div class="nbody">
+            <div class="tf-row"><span class="dot"></span><input id="tn1" value="a new space game idea" oninput="tfChange()"></div>
+            <div class="tf-row"><span class="dot"></span><input id="tn2" value="a birthday cake shaped like a rocket" oninput="tfChange()"></div>
+            <div class="tf-row"><span class="dot"></span><input id="tn3" value="a hat that grants wishes" oninput="tfChange()"></div>
+            <div style="margin-top:8px"><button class="btn ghost" onclick="addTfRow()">＋ Add item</button></div>
+          </div>
+          <span class="handle out" style="top:64px" title="Output: list of items"></span>
+        </div>
+        <div class="wire"></div>
+        <div class="node" style="position:relative;min-width:300px">
+          <div class="nhead">💬 Prompt <span class="pill blue" style="margin-left:auto">2 variants</span></div>
+          <div class="nbody">
+            <div style="margin-bottom:6px">
+              <span class="vtab active" id="vt0" onclick="selVariant(0)">Variant A</span><span class="vtab" id="vt1" onclick="selVariant(1)">Variant B</span>
+            </div>
+            <div class="ptext" id="pvPreview"></div>
+            <div class="legend" style="display:flex;justify-content:space-between">
+              <span>Template var <code>{item}</code> ← Text node (3 items)</span>
+              <span class="handle in" style="position:static;display:inline-block" title="input handle for {item}"></span>
+            </div>
+          </div>
+          <span class="handle in" style="top:70px" title="{item}"></span>
+          <span class="handle out" style="top:70px" title="Responses"></span>
+        </div>
+        <div class="wire"></div>
+        <div class="node" style="min-width:170px">
+          <div class="nhead">🤖 Responses</div>
+          <div class="nbody" style="color:var(--txt-dim);font-size:12.5px">
+            One response per (prompt variant × text item × model) cell.<br><br>
+            <span id="respCount" class="chip model">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">Try it: edit the Text-node items above or switch prompt variants. The filled preview updates live, exactly like ChainForge's <code>TemplateHighlightTextarea</code> highlighting (<code>{var}</code> in orange = variable, green = filled value).</div>
+
+    <h3>The mechanics, step by step</h3>
+    <div class="cols2">
+      <div class="card">
+        <h3 style="margin-top:0">Prompt node</h3>
+        <ul class="tight">
+          <li><b>Template parsing:</b> on every edit, the node re-parses the prompt text for <code>{varnames}</code> and unions them into <code>templateVars</code>.</li>
+          <li><b>Handles appear/disappear</b> automatically — one input handle per variable. Missing connections block the run ("Missing inputs to one or more template variables").</li>
+          <li><b>Variants:</b> the <i>＋ Add prompt variant</i> button adds a sibling prompt. Each variant is an independent prompt; <code>promptText</code> is stored as an <b>array</b>.</li>
+          <li><b>Execution:</b> before querying, <code>pullInputData()</code> resolves every variable. When multiple variants exist, the node packs all of them into a synthetic variable (<code>var_for_prompt_templates</code>) and treats the template as <code>{prompt}</code>.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Text node</h3>
+        <ul class="tight">
+          <li>A simple list of named string fields. Its output is a <b>list</b> — one value per field row.</li>
+          <li>Each row can also carry a label; downstream, a companion <code>&lt;var&gt; [label]</code> key travels with the value for display in the response table.</li>
+          <li>Connected to a prompt variable, the prompt node runs <b>once per row</b> — this is ChainForge's batching primitive (the "N items in, N responses out" pattern).</li>
+          <li>Other feeders work the same way: <b>File node</b> rows, <b>Inspect/response columns</b>, even <b>prompt variants</b> from an upstream prompt node.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="src">Source: <code>src/PromptNode.tsx</code> (template var handling, <code>onPromptTextChange</code>, <code>run()</code>), <code>src/TextFieldsNode.tsx</code>, <code>src/backend/template.ts</code>.</p>
+  </section>
+</div>
+
+<!-- ================= TAB 2 ================= -->
+<div class="tabpane" id="t2">
+  <section>
+    <h2>How multiple model providers are supported</h2>
+    <p class="lead">Providers are <b>pluggable</b>. The front-end keeps a registry of <i>settings schemas</i>; the back-end keeps a registry of <i>callables</i>. Adding a provider means dropping in a small Python script — no core changes.</p>
+
+    <div class="cols2">
+      <div class="card">
+        <h3 style="margin-top:0">Front-end registry</h3>
+        <pre><span class="c">// src/ModelSettingSchemas.tsx</span>
+<span class="k">export const</span> ModelSettings = {
+  <span class="s">"gpt-3.5-turbo"</span>: ChatGPTSettings,
+  <span class="s">"claude-v1"</span>:     ClaudeSettings,
+  <span class="s">"gemini-2.5"</span>:    Gemini25Settings,
+  <span class="s">"openrouter"</span>:    OpenRouterSettings,
+  <span class="s">"opencode-zen"</span>:  OpenCodeZenSettings, <span class="c">// ← new</span>
+  ...
+};</pre>
+        <p style="font-size:13px;color:var(--txt-dim)">Each entry is a <b>JSON schema + UI schema</b> pair handed to <code>react-jsonschema-form</code> inside the settings modal (<code>ModelSettingsModal.tsx</code>). Saved form data is post-processed into <b>kwargs</b> for the Python call.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Back-end provider protocol</h3>
+        <pre><span class="c"># chainforge/providers/protocol.py</span>
+<span class="k">@provider</span>(name=<span class="s">"OpenCode Zen"</span>,
+          emoji=<span class="s">"⛏"</span>,
+          category=<span class="s">"model"</span>,
+          models=ZEN_MODELS,
+          rate_limit=<span class="n">60</span>,
+          settings_schema=OPENCODE_SETTINGS_SCHEMA)
+<span class="k">def</span> OpenCodeZenCompletion(
+    prompt: <span class="n">str</span>,
+    model: <span class="n">str</span> | <span class="k">None</span> = <span class="k">None</span>,
+    chat_history: <span class="n">list</span> | <span class="k">None</span> = <span class="k">None</span>,
+    temperature: <span class="n">float</span> = <span class="n">0.7</span>,
+    max_tokens: <span class="n">int</span> = <span class="n">4096</span>,
+    **kwargs) -> <span class="n">str</span>: ...</pre>
+        <p style="font-size:13px;color:var(--txt-dim)">The <code>ProviderRegistry</code> decorator (<code>chainforge/examples/custom_provider_opencode.py</code>) advertises the provider, its model list, and the settings schema the UI should render.</p>
+      </div>
+    </div>
+
+    <h3>The full request path</h3>
+    <div class="canvas" style="min-height:150px">
+      <div class="nodeline" style="justify-content:center">
+        <div class="node" style="min-width:150px"><div class="nbody" style="text-align:center">Prompt node<br><small style="color:var(--txt-dim)">formData → kwargs</small></div></div>
+        <div class="wire"></div>
+        <div class="node" style="min-width:150px"><div class="nbody" style="text-align:center">Flask backend<br><code style="font-size:11px">/app/callLLM</code></div></div>
+        <div class="wire"></div>
+        <div class="node" style="min-width:150px"><div class="nbody" style="text-align:center">ProviderRegistry<br><small style="color:var(--txt-dim)">dispatch by base_model</small></div></div>
+        <div class="wire"></div>
+        <div class="node" style="min-width:150px"><div class="nbody" style="text-align:center">⛏ OpenCode Zen<br><small style="color:var(--txt-dim)">openai SDK →<br>opencode.ai/zen/v1</small></div></div>
+      </div>
+    </div>
+
+    <h3>API keys & environment</h3>
+    <div class="callout green"><code>flask_app.py → /app/fetchEnvironAPIKeys</code> maps environment variables to providers. OpenCode is already wired in: <code>'OPENCODE_API_KEY': 'OpenCode_Zen'</code>. The example provider also loads a project-root <code>.env</code> file with a tiny built-in loader (no <code>python-dotenv</code> dependency).</div>
+
+    <h3>Current provider roster</h3>
+    <div class="provlist" id="roster"></div>
+    <p class="src">Sources: <code>src/ModelSettingSchemas.tsx</code> (<code>ModelSettings</code> registry), <code>chainforge/providers/protocol.py</code>, <code>chainforge/examples/custom_provider_opencode.py</code>, <code>flask_app.py</code>.</p>
+  </section>
+</div>
+
+<!-- ================= TAB 3 ================= -->
+<div class="tabpane" id="t3">
+  <section>
+    <h2>What happens with multiple prompts attached to a Prompt node?</h2>
+    <p class="lead">"Multiple prompts" can enter a Prompt node two ways — and both fan out into a <b>Cartesian product</b> of executions. Configure the scenario below and watch the response grid.</p>
+
+    <div class="card">
+      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end">
+        <div class="field" style="margin:0">
+          <label>Prompt variants in the Prompt node</label>
+          <button class="btn" onclick="bump('pv',-1)">−</button> <span id="pvVal" style="font-family:Consolas,monospace;width:24px;display:inline-block;text-align:center">2</span> <button class="btn" onclick="bump('pv',1)">＋</button>
+        </div>
+        <div class="field" style="margin:0">
+          <label>Text-node items feeding <code>{item}</code></label>
+          <button class="btn" onclick="bump('ti',-1)">−</button> <span id="tiVal" style="font-family:Consolas,monospace;width:24px;display:inline-block;text-align:center">3</span> <button class="btn" onclick="bump('ti',1)">＋</button>
+        </div>
+        <div class="field" style="margin:0">
+          <label>Models selected</label>
+          <button class="btn" onclick="bump('md',-1)">−</button> <span id="mdVal" style="font-family:Consolas,monospace;width:24px;display:inline-block;text-align:center">2</span> <button class="btn" onclick="bump('md',1)">＋</button>
+        </div>
+        <div style="font-size:20px;font-family:Consolas,monospace;color:var(--accent)" id="totalCalls">= 12 calls</div>
+      </div>
+    </div>
+
+    <h3>Resulting response table</h3>
+    <div class="card" style="overflow:auto">
+      <table class="grid" id="cartGrid"></table>
+      <p class="legend">Each row is one API call. ChainForge groups them in the response table by <span class="chip prompt">prompt</span>, then by <span class="chip model">model</span>, then by the input <span class="chip item">item</span> (and its <code>[label]</code>). Order in the grid = iteration order of the loop nest: <code>for prompt → for model → for item</code>.</p>
+    </div>
+
+    <div class="cols2">
+      <div class="card">
+        <h3 style="margin-top:0">Case A — Prompt variants <i>inside</i> one Prompt node</h3>
+        <ul class="tight">
+          <li><code>promptText</code> becomes an array <code>[vA, vB, …]</code>.</li>
+          <li><code>run()</code> packs the variants into a synthetic variable (<code>ensureUniqueName("prompt", …)</code>) so the count-fetcher sees <code>{prompt}</code> with N values.</li>
+          <li>Responses are tagged with <code>&lt;var&gt; [label]</code> so the table can label them <i>“Variant A / B”</i> and compare side-by-side.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Case B — Multiple prompt outputs <i>fed in</i> via an edge</h3>
+        <ul class="tight">
+          <li>An upstream Prompt node's outputs (or a Text node's rows) arrive as a <b>list value</b> for a template var.</li>
+          <li>The variable's handle carries the whole list; the node runs once per list element.</li>
+          <li>Combine with Case A and any selected models → the product multiplies. Chains of 2 prompt nodes × 3 variants × 4 items × 3 models = 72 calls. Watch your rate limits (OpenCode Zen: 60/min in the example provider).</li>
+        </ul>
+      </div>
+    </div>
+    <p class="src">Source: <code>PromptNode.tsx</code> — <code>fetchResponseCounts()</code>, the <code>var_for_prompt_templates</code> packing in <code>run()</code>, and <code>bucketChatHistoryInfosByLLM()</code> for continue-chat mode.</p>
+  </section>
+</div>
+
+<!-- ================= TAB 4 ================= -->
+<div class="tabpane" id="t4">
+  <section>
+    <h2>Prompt-node configuration dialogue — OpenCode mock variations</h2>
+    <p class="lead">The backbone was replaced with <b>OpenCode Zen</b> (an OpenAI-compatible gateway, <code>https://opencode.ai/zen/v1</code>). These are live, clickable mock variations of the settings dialogue: only the settings the OpenCode provider declares in its <code>settings_schema</code> are exposed; legacy OpenAI-era fields are removed; and every other provider is <b>disabled</b>.</p>
+
+    <div class="modal-tabs">
+      <button class="btn sel" onclick="showMock('m1',this)">A · Default settings</button>
+      <button class="btn" onclick="showMock('m2',this)">B · Model picker</button>
+      <button class="btn" onclick="showMock('m3',this)">C · Missing API key</button>
+      <button class="btn" onclick="showMock('m4',this)">D · Removed legacy fields</button>
+      <button class="btn" onclick="showMock('m5',this)">E · Provider list (others disabled)</button>
+    </div>
+
+    <!-- Mock A -->
+    <div class="mockwrap" id="m1">
+      <div class="modal">
+        <div class="mhead">
+          <div class="mtitle">⛏ Model Settings: <span style="color:var(--opencode)">OpenCode Zen</span> <span class="badge new">SCHEMA v2</span></div>
+          <div style="margin-left:auto;color:var(--txt-dim)">✕</div>
+        </div>
+        <div class="mbody">
+          <div class="field">
+            <label>Model</label>
+            <select disabled style="opacity:.85"><option>gpt-5.5</option></select>
+            <div class="help">Change from the node's model list (Mock B). Provider category and model are separate dropdowns there.</div>
+          </div>
+          <div class="field">
+            <label>system_message</label>
+            <textarea id="sysMsg" oninput="sysCount()">You are a concise assistant. Answer in at most 3 sentences.</textarea>
+            <div class="help"><span class="rangeval" id="sysLen">68</span> chars · Sent as the system-role message ahead of the user prompt on <code>/v1/chat/completions</code>. Leave empty to send no system message. Template variables like <code>{item}</code> are <b>not</b> resolved here — use the Prompt-node canvas for templating.</div>
+          </div>
+          <div class="field">
+            <label>temperature <span class="rangeval" id="tempVal">0.7</span></label>
+            <input type="range" min="0" max="2" step="0.01" value="0.7" oninput="document.getElementById('tempVal').textContent=(+this.value).toFixed(2)">
+            <div class="help">Controls the 'creativity' or randomness of the response. Defaults to 0.7. <span style="color:var(--txt-dim)">(ui:widget = range)</span></div>
+          </div>
+          <div class="field">
+            <label>max_tokens <span class="rangeval" id="mtVal">4096</span></label>
+            <input type="range" min="1" max="65536" step="1" value="4096" oninput="document.getElementById('mtVal').textContent=this.value">
+            <div class="help">Maximum number of tokens to generate in the response. Range 1–65536.</div>
+          </div>
+          <div class="field">
+            <label>shortname</label>
+            <input type="text" value="gpt-5.5">
+            <div class="help">Nickname shown in the response table. Auto-derived from the model name unless you edit it.</div>
+          </div>
+          <div class="callout green" style="margin-top:16px">These fields mirror <code>OPENCODE_SETTINGS_SCHEMA</code> in <code>custom_provider_opencode.py</code> — nothing more is declared, so nothing more is rendered. <b>system_message</b> is sent as a system-role message by the provider wrapper, not passed as a raw kwarg. The schema is served to <code>react-jsonschema-form</code> exactly like built-in providers.</div>
+        </div>
+        <div class="mfoot">
+          <button class="btn ghost">♡ Favorite</button>
+          <button class="btn primary">Submit</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mock B -->
+    <div class="mockwrap" id="m2" style="display:none">
+      <div class="modal">
+        <div class="mhead">
+          <div class="mtitle">⛏ Model Settings: OpenCode Zen — model picker open</div>
+          <div style="margin-left:auto;color:var(--txt-dim)">✕</div>
+        </div>
+        <div class="mbody">
+          <div class="field">
+            <label>Provider category <span class="badge new">separate dropdown</span></label>
+            <select id="catSel" onchange="renderZenMenu()"></select>
+            <div class="help">Groups models by upstream provider — e.g. all GPT models live under <b>openai</b>. The model list below filters to the chosen category.</div>
+          </div>
+          <div class="field dropdown" style="margin-bottom:0">
+            <label>Model</label>
+            <input type="text" id="modelSel" value="gpt-5.5" readonly>
+            <div class="menu" id="zenMenu"></div>
+          </div>
+          <p class="legend" style="margin-top:12px">Prices shown per model are <b>input / output per 1M tokens</b> from <a href="https://opencode.ai/docs/zen/" target="_blank">opencode.ai/docs/zen</a>. See tab 5 for the full pricing table, cached-read/write rates, and deprecated models.</p>
+        </div>
+        <div class="mfoot"><button class="btn primary">Submit</button></div>
+      </div>
+    </div>
+
+    <!-- Mock C -->
+    <div class="mockwrap" id="m3" style="display:none">
+      <div class="modal">
+        <div class="mhead">
+          <div class="mtitle">⛏ Model Settings: OpenCode Zen — key missing</div>
+          <div style="margin-left:auto;color:var(--txt-dim)">✕</div>
+        </div>
+        <div class="mbody">
+          <div class="err" style="margin-bottom:14px">⚠ OPENCODE_API_KEY is not set. Get a key at <b>opencode.ai/zen</b> and add it to your environment or a <code>.env</code> file.</div>
+          <div class="field">
+            <label>OPENCODE_API_KEY</label>
+            <input type="password" placeholder="oc-••••••••••••••••" id="ocKey" oninput="keyCheck(this.value)">
+            <div class="help">Read from the environment (auto-loaded from project-root <code>.env</code>) or paste here for this session. Mapped as <code>'OPENCODE_API_KEY': 'OpenCode_Zen'</code> in <code>/app/fetchEnvironAPIKeys</code>.</div>
+          </div>
+          <div class="field">
+            <label>Base URL (fixed)</label>
+            <input type="text" value="https://opencode.ai/zen/v1" disabled>
+            <div class="help">Hard-coded in the provider: <code>ZEN_BASE_URL</code>. The backbone instantiates the <code>openai.OpenAI</code> client against this endpoint — no per-user override, by design.</div>
+          </div>
+          <p class="legend">Pressing Submit without a key raises the exception from <code>_client()</code>, surfaced on the node as an error state.</p>
+        </div>
+        <div class="mfoot"><button class="btn primary" id="ocSubmit" disabled>Submit</button></div>
+      </div>
+    </div>
+
+    <!-- Mock D -->
+    <div class="mockwrap" id="m4" style="display:none">
+      <div class="modal">
+        <div class="mhead">
+          <div class="mtitle">Model settings — legacy → OpenCode field diff</div>
+          <div style="margin-left:auto;color:var(--txt-dim)">✕</div>
+        </div>
+        <div class="mbody">
+          <p style="margin:0 0 6px;font-size:13px;color:var(--txt-dim)">Fields removed because the OpenCode settings schema does not declare them, or they are meaningless on the Zen gateway:</p>
+          <div class="removed">n — number of completions (Zen gateway: single choice per call)</div>
+          <div class="removed">logit_bias</div>
+          <div class="removed">functions / function_call (OpenAI function-calling spec)</div>
+          <div class="removed">echo (completion-style, not chat)</div>
+          <div class="removed">presence_penalty / frequency_penalty (not in schema)</div>
+          <div class="removed">response_format / JSON mode (not in schema)</div>
+          <div class="removed">top_p (not in schema — only temperature + max_tokens are exposed)</div>
+          <div class="removed">Dall-E / GPT-Image / WebLLM sub-forms (image &amp; in-browser providers disabled with the rest)</div>
+          <p style="margin:14px 0 6px;font-size:13px;color:var(--txt-dim)">Fields kept / newly introduced:</p>
+          <div class="added">✓ temperature (0–2, default 0.7, range widget)<br>✓ max_tokens (1–65536, default 4096, range widget)<br>✓ system_message — back by popular demand: sent as a system-role message, not a raw kwarg<br>✓ provider category + model — separate dropdowns; category groups the Zen catalogue by upstream provider (openai, anthropic, google, xai, moonshot, …)<br>✓ shortname — response-table nickname (unchanged UI affordance)<br>✓ API key handling via OPENCODE_API_KEY env / .env</div>
+          <div class="callout">Rationale: <code>ModelSettingsModal</code> renders <i>only</i> what the provider's <code>settings_schema</code> declares. By trimming the schema, the old OpenAI/Anthropic/… settings fields vanish automatically — zero modal code changes needed.</div>
+        </div>
+        <div class="mfoot"><button class="btn primary">Done</button></div>
+      </div>
+    </div>
+
+    <!-- Mock E -->
+    <div class="mockwrap" id="m5" style="display:none">
+      <div class="modal" style="width:640px">
+        <div class="mhead">
+          <div class="mtitle">Provider list — OpenCode only</div>
+          <div style="margin-left:auto;color:var(--txt-dim)">✕</div>
+        </div>
+        <div class="mbody">
+          <p style="margin:0 0 12px;font-size:13px;color:var(--txt-dim)">Every previously enabled provider is disabled in the node's model picker. Only <b>OpenCode Zen</b> can be attached to a Prompt node.</p>
+          <div class="provlist" id="provlistMock"></div>
+          <div class="callout warn" style="margin-top:14px">Opening settings for a disabled provider shows: <i>“Did not find settings schema for base model … Maybe you are missing importing a custom provider script?”</i> — the same fallback <code>ModelSettingsModal</code> already uses for unknown <code>base_model</code>s. Old flows keep their saved <code>formData</code> but cannot run.</div>
+        </div>
+        <div class="mfoot"><button class="btn primary">Close</button></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ================= TAB 5 ================= -->
+<div class="tabpane" id="t5">
+  <section>
+    <h2>OpenCode Zen model pricing</h2>
+    <p class="lead">Pay-as-you-go, per 1M tokens (USD). Source: <a href="https://opencode.ai/docs/zen/" target="_blank">opencode.ai/docs/zen</a>. These rates back the cost labels shown in the model picker (Mock B) and can power per-row cost estimation in the response table.</p>
+
+    <div class="cols2">
+      <div class="callout green" style="margin:0"><b>Auto-reload:</b> when your balance drops below $5, Zen reloads $20 automatically (configurable, can be disabled).</div>
+      <div class="callout warn" style="margin:0"><b>Monthly limits:</b> workspace-wide and per-member caps, e.g. $20/month. Auto-reload may exceed the cap once triggered.</div>
+    </div>
+
+    <div class="card" style="overflow:auto;max-height:520px">
+      <table class="grid" id="priceTable"></table>
+    </div>
+
+    <h3>Notes from the Zen docs</h3>
+    <ul class="tight">
+      <li><b>Free models</b> (highlighted rows) are free for a limited time while teams collect feedback; <i>Big Pickle</i> and <i>Space Bunny Free</i> are stealth models — Space Bunny's provider follows a zero-retention policy.</li>
+      <li><b>Jev 1.13</b> (TypeSafe / System One) is a structured-decision model: it returns values and probabilities, not text, on a dedicated <code>/v1/systemone</code> endpoint.</li>
+      <li><b>Tiered pricing:</b> GPT models are priced per context tier (≤ / > 272K tokens); Claude Sonnet 4.5 and Grok per ≤ / > 200K; Gemini 3.1 Pro per ≤ / > 200K. The table shows the base (short-context) rate.</li>
+      <li><b>Deprecated:</b> the GPT 5.x Codex family (except GPT 5.3+) was deprecated July 23, 2026; Claude Opus 4.1 (Aug 5, 2026) and Sonnet 4 (Jun 15, 2026) are retired and not listed.</li>
+      <li><b>Endpoints vary by family:</b> OpenAI/Grok → <code>/v1/responses</code>, Anthropic/Qwen-Flash → <code>/v1/messages</code>, open-compatible models → <code>/v1/chat/completions</code>. The ChainForge example provider pins <code>/v1/chat/completions</code>; supporting all families properly means routing per-category.</li>
+    </ul>
+  </section>
+</div>
+
+<footer style="color:#5f6779;font-size:12px;margin-top:50px;border-top:1px solid var(--line);padding-top:14px">
+  ChainForge interactive guide · generated from <code>src/PromptNode.tsx</code>, <code>src/TextFieldsNode.tsx</code>, <code>src/ModelSettingSchemas.tsx</code>, <code>src/ModelSettingsModal.tsx</code>, <code>chainforge/providers/protocol.py</code>, <code>chainforge/examples/custom_provider_opencode.py</code>, <code>chainforge/flask_app.py</code>
+</footer>
+</div>
+
+<script>
+/* ---- Tabs ---- */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.tabpane').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById(t.dataset.t).classList.add('active');
+  };
+});
+
+/* ---- Tab 1: text node demo ---- */
+const variants=[
+ 'Write a haiku about {item}.\nKeep it under 12 words.',
+ 'Design a product pitch for {item}.\nTone: excited startup founder. End with a tagline.'
+];
+let curVar=0;
+function renderPreview(){
+  const v=variants[curVar];
+  const items=[document.getElementById('tn1'),document.getElementById('tn2'),document.getElementById('tn3'),...extraRows].map(i=>i.value).filter(x=>x!=='');
+  let html=v.replace(/\{item\}/g,'⟪ITEM⟫');
+  html=escapeHtml(html);
+  // fill sequentially with items
+  let idx=0;
+  html=html.split('⟪ITEM⟫').map((seg,i,arr)=>{
+    let out=escapeHtml(seg);
+    if(i<arr.length-1){
+      const val=idx<items.length?items[idx]:'…'; idx++;
+      out+='<span class="vfill">'+escapeHtml(val)+'</span>';
+    }
+    return out;
+  }).join('');
+  // highlight the raw var names in unfilled state
+  document.getElementById('pvPreview').innerHTML=html.replace(/(\{[a-z_]+\})/g,'<span class="vvar">$1</span>');
+  document.getElementById('respCount').textContent='variants×items = '+(variants.length*items.length)+' responses (per model)';
+}
+const escapeHtml=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+let extraRows=[];
+function addTfRow(){
+  const inp=document.createElement('input'); inp.value=''; inp.oninput=tfChange; inp.placeholder='new item…';
+  const row=document.createElement('div'); row.className='tf-row';
+  const dot=document.createElement('span'); dot.className='dot';
+  row.appendChild(dot); row.appendChild(inp);
+  inp.closest('.node').querySelector('.nbody').insertBefore(row, inp.closest('.node').querySelector('.nbody>div:last-child'));
+  extraRows.push(inp); tfChange();
+}
+function tfChange(){renderPreview()}
+function selVariant(i){
+  curVar=i;
+  document.getElementById('vt0').classList.toggle('active',i===0);
+  document.getElementById('vt1').classList.toggle('active',i===1);
+  renderPreview();
+}
+renderPreview();
+
+/* ---- Tab 2: roster ---- */
+const roster=[
+ ['⛏','OpenCode Zen','on','opencode-zen · custom provider · 60 req/min'],
+ ['🤖','OpenAI','off','gpt-3.5-turbo, gpt-4, dall-e…'],
+ ['🎭','Anthropic (Claude)','off','claude-v1…'],
+ ['✨','Google AI (Gemini)','off','gemini-2.5…'],
+ ['☁️','Azure OpenAI','off','azure-openai'],
+ ['🤗','Hugging Face','off','hf'],
+ ['🦙','Ollama','off','ollama'],
+ ['🔶','Amazon Bedrock','off','bedrock + br.* legacy keys'],
+ ['🟢','Together Chat','off','together'],
+ ['🐋','DeepSeek','off','deepseek'],
+ ['🪶','MiniMax','off','minimax'],
+ ['🌐','OpenRouter','off','openrouter (+image)'],
+ ['🖥','WebLLM','off','webllm (in-browser)']
+];
+document.getElementById('roster').innerHTML=roster.map(r=>`
+  <div class="prov ${r[2]==='on'?'enabled':'disabled'}">
+    <span class="em">${r[0]}</span>
+    <span class="grow"><b>${r[1]}</b><br><small style="color:var(--txt-dim)">${r[3]}</small></span>
+    <span class="badge ${r[2]==='on'?'on':'off'}">${r[2]==='on'?'ENABLED':'DISABLED'}</span>
+  </div>`).join('');
+
+/* ---- Tab 3: cartesian product ---- */
+const state={pv:2,ti:3,md:2};
+const prompts=['Variant A: “Haiku about {item}”','Variant B: “Pitch for {item}”'];
+const items0=['space game idea','rocket cake','wish-granting hat'];
+const models=['gpt-5.5','kimi-k3','glm-5.3'];
+function bump(k,d){
+  state[k]=Math.max(1,Math.min(4,state[k]+d));
+  document.getElementById('pvVal').textContent=state.pv;
+  document.getElementById('tiVal').textContent=state.ti;
+  document.getElementById('mdVal').textContent=state.md;
+  render();
+}
+function render(){
+  const total=state.pv*state.ti*state.md;
+  document.getElementById('totalCalls').textContent='= '+total+' API calls'+(total>60?'  ⚠ exceeds Zen rate limit (60/min)':'');
+  let html='<tr><th>#</th><th>prompt</th><th>model</th><th>{item}</th><th>response cell</th></tr>';
+  let n=0;
+  for(let p=0;p<state.pv;p++)for(let m=0;m<state.md;m++)for(let i=0;i<state.ti;i++){
+    n++;
+    html+=`<tr><td>${n}</td>
+      <td><span class="chip prompt">${prompts[p].split(':')[0]}</span></td>
+      <td><span class="chip model">${models[m]}</span></td>
+      <td><span class="chip item">${items0[i]}</span></td>
+      <td class="resp">…row ${n} streams here…</td></tr>`;
+  }
+  document.getElementById('cartGrid').innerHTML=html;
+}
+render();
+
+/* ---- Tab 4 mocks ---- */
+function showMock(id,btn){
+  ['m1','m2','m3','m4','m5'].forEach(m=>document.getElementById(m).style.display=(m===id?'flex':'none'));
+  document.querySelectorAll('.modal-tabs .btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+/* Zen catalogue: [id, label, category, $in, $out, $cachedRead, $cachedWrite, flag] per 1M tokens (https://opencode.ai/docs/zen) */
+const ZEN = [
+ ['gpt-6-astra','GPT 6 Astra','openai',10,50,1.00,12.50],
+ ['gpt-6-sol','GPT 6 Sol','openai',2,10,0.20,2.50],
+ ['gpt-6.1-sol','GPT 6.1 Sol','openai',2,10,0.10,2.50],
+ ['gpt-6-luna','GPT 6 Luna','openai',0.10,0.50,0.01,0.125],
+ ['gpt-5.6-sol','GPT 5.6 Sol','openai',4,20,0.40,5],
+ ['gpt-5.6-terra','GPT 5.6 Terra','openai',2,12,0.20,2.50],
+ ['gpt-5.6-luna','GPT 5.6 Luna','openai',0.20,1.20,0.02,0.25],
+ ['gpt-5.5','GPT 5.5','openai',5,30,0.50,null],
+ ['gpt-5.5-pro','GPT 5.5 Pro','openai',30,180,30,null],
+ ['gpt-5.4','GPT 5.4','openai',2.50,15,0.25,null],
+ ['gpt-5.4-pro','GPT 5.4 Pro','openai',30,180,30,null],
+ ['gpt-5.4-mini','GPT 5.4 Mini','openai',0.75,4.50,0.075,null],
+ ['gpt-5.4-nano','GPT 5.4 Nano','openai',0.20,1.25,0.02,null],
+ ['gpt-5.3-codex','GPT 5.3 Codex','openai',1.75,14,0.175,null],
+ ['gpt-5.3-codex-spark','GPT 5.3 Codex Spark','openai',1.75,14,0.175,null],
+ ['gpt-5.2','GPT 5.2','openai',1.75,14,0.175,null,'DEPRECATED'],
+ ['gpt-5.2-codex','GPT 5.2 Codex','openai',1.75,14,0.175,null,'DEPRECATED'],
+ ['gpt-5.1','GPT 5.1','openai',1.07,8.50,0.107,null,'DEPRECATED'],
+ ['gpt-5.1-codex','GPT 5.1 Codex','openai',1.07,8.50,0.107,null,'DEPRECATED'],
+ ['gpt-5.1-codex-max','GPT 5.1 Codex Max','openai',1.25,10,0.125,null,'DEPRECATED'],
+ ['gpt-5.1-codex-mini','GPT 5.1 Codex Mini','openai',0.25,2.00,0.025,null,'DEPRECATED'],
+ ['gpt-5','GPT 5','openai',1.07,8.50,0.107,null],
+ ['gpt-5-codex','GPT 5 Codex','openai',1.07,8.50,0.107,null,'DEPRECATED'],
+ ['gpt-5-nano','GPT 5 Nano','openai',0.05,0.40,0.005,null],
+ ['claude-fable-5-1','Claude Fable 5.1','anthropic',10,50,0.25,12.50],
+ ['claude-fable-5','Claude Fable 5','anthropic',10,50,1.00,12.50],
+ ['claude-opus-5-5','Claude Opus 5.5','anthropic',4,20,0.20,5],
+ ['claude-opus-5','Claude Opus 5','anthropic',5,25,0.50,6.25],
+ ['claude-opus-4-8','Claude Opus 4.8','anthropic',5,25,0.50,6.25],
+ ['claude-opus-4-7','Claude Opus 4.7','anthropic',5,25,0.50,6.25],
+ ['claude-opus-4-6','Claude Opus 4.6','anthropic',5,25,0.50,6.25],
+ ['claude-opus-4-5','Claude Opus 4.5','anthropic',5,25,0.50,6.25],
+ ['claude-sonnet-5','Claude Sonnet 5','anthropic',2,10,0.20,2.50],
+ ['claude-sonnet-4-6','Claude Sonnet 4.6','anthropic',3,15,0.30,3.75],
+ ['claude-sonnet-4-5','Claude Sonnet 4.5','anthropic',3,15,0.30,3.75],
+ ['claude-haiku-4-5','Claude Haiku 4.5','anthropic',1,5,0.10,1.25],
+ ['gemini-3.8-flash','Gemini 3.8 Flash','google',1.50,7.50,0.15,null],
+ ['gemini-3.7-flash','Gemini 3.7 Flash','google',1.50,7.50,0.15,null],
+ ['gemini-3.6-flash','Gemini 3.6 Flash','google',1.50,7.50,0.15,null],
+ ['gemini-3.5-flash','Gemini 3.5 Flash','google',1.50,9.00,0.15,null],
+ ['gemini-3.5-flash-lite','Gemini 3.5 Flash Lite','google',0.30,2.50,0.03,null],
+ ['gemini-3.1-pro','Gemini 3.1 Pro','google',2,12,0.20,null],
+ ['gemini-3-flash','Gemini 3 Flash','google',0.50,3.00,0.05,null],
+ ['grok-4.7','Grok 4.7','xai',2,6,0.50,null],
+ ['grok-4.6','Grok 4.6','xai',2,6,0.50,null],
+ ['grok-4.5','Grok 4.5','xai',2,6,0.30,null],
+ ['grok-build-0.1','Grok Build 0.1','xai',1,2,0.20,null],
+ ['muse-spark-1.3','Muse Spark 1.3','muse',1.25,4.25,0.15,null],
+ ['muse-spark-1.2','Muse Spark 1.2','muse',1.25,4.25,0.15,null],
+ ['muse-spark-1.3-contributor-free','Muse Spark 1.3 Contributor Free','free','Free','Free','Free',null],
+ ['qwen3.8-max','Qwen3.8 Max','alibaba',2,6,0.25,2.50],
+ ['qwen3.8-flash','Qwen3.8 Flash','alibaba',0.15,0.47,0.016,0.20],
+ ['qwen3.7-max','Qwen3.7 Max','alibaba',2.50,7.50,0.50,3.125],
+ ['qwen3.7-plus','Qwen3.7 Plus','alibaba',0.40,1.60,0.04,0.50],
+ ['qwen3.6-plus','Qwen3.6 Plus','alibaba',0.50,3.00,0.05,0.625],
+ ['qwen3.5-plus','Qwen3.5 Plus','alibaba',0.20,1.20,0.02,0.25],
+ ['deepseek-v4.1-flash','DeepSeek V4.1 Flash','deepseek',0.30,1.20,0.006,null],
+ ['deepseek-v4-pro','DeepSeek V4 Pro','deepseek',1.74,3.48,0.145,null],
+ ['deepseek-v4-flash','DeepSeek V4 Flash','deepseek',0.14,0.28,0.028,null],
+ ['deepseek-v4-flash-vision-exp','DeepSeek V4 Flash Vision Exp','deepseek',0.14,0.28,0.028,null],
+ ['minimax-m3','MiniMax M3','minimax',0.30,1.20,0.06,null],
+ ['minimax-m2.7','MiniMax M2.7','minimax',0.30,1.20,0.06,null],
+ ['minimax-m2.5','MiniMax M2.5','minimax',0.30,1.20,0.06,null],
+ ['glm-5.3-flash','GLM 5.3 Flash','zhipu',0.15,0.50,0.03,null],
+ ['glm-5.3','GLM 5.3','zhipu',1.40,4.40,0.26,null],
+ ['glm-5.2','GLM 5.2','zhipu',1.40,4.40,0.26,null],
+ ['glm-5.1','GLM 5.1','zhipu',1.40,4.40,0.26,null],
+ ['glm-5','GLM 5','zhipu',1.00,3.20,0.20,null],
+ ['kimi-k3','Kimi K3','moonshot',3,15,0.30,null],
+ ['kimi-k2.7-code','Kimi K2.7 Code','moonshot',0.95,4.00,0.19,null],
+ ['kimi-k2.6','Kimi K2.6','moonshot',0.95,4.00,0.16,null],
+ ['kimi-k2.5','Kimi K2.5','moonshot',0.60,3.00,0.10,null],
+ ['jev-1.13','Jev 1.13','typesafe',0.042,'Free',null,null],
+ ['jev-1.13-free','Jev 1.13 Free','free','Free','Free',null,null],
+ ['big-pickle','Big Pickle','free','Free','Free','Free',null],
+ ['space-bunny-free','Space Bunny Free','free','Free','Free','Free',null],
+ ['longcat-2.5-preview-free','LongCat 2.5 Preview Free','free','Free','Free','Free',null],
+ ['mimo-v2.6-flash-free','MiMo-V2.6-Flash Free','free','Free','Free','Free',null],
+ ['mimo-v2.5-free','MiMo-V2.5 Free','free','Free','Free','Free',null],
+ ['ling-3.0-flash-fin-free','Ling 3.0 Flash Fin Free','free','Free','Free','Free',null],
+ ['nemotron-3-ultra-free','Nemotron 3 Ultra Free','free','Free','Free','Free',null],
+ ['nemotron-3.5-lightning-free','Nemotron 3.5 Lightning Free','free','Free','Free','Free',null]
+];
+const CAT_LABEL = {openai:'OpenAI (GPT)',anthropic:'Anthropic (Claude)',google:'Google (Gemini)',xai:'xAI (Grok)',alibaba:'Alibaba (Qwen)',deepseek:'DeepSeek',minimax:'MiniMax',zhipu:'Zhipu (GLM)',moonshot:'Moonshot (Kimi)',muse:'Muse',typesafe:'TypeSafe (Jev / System One)',free:'Free / Stealth'};
+const fmt$ = v => v===null||v===undefined ? '—' : ('$'+(+v).toFixed(v<0.1&&v>0?3:2));
+
+/* Category dropdown for Mock B */
+const cats=[...new Set(ZEN.map(m=>m[2]))];
+document.getElementById('catSel').innerHTML=cats.map(c=>`<option value="${c}" ${c==='openai'?'selected':''}>${CAT_LABEL[c]}</option>`).join('');
+function renderZenMenu(){
+  const cat=document.getElementById('catSel').value;
+  document.getElementById('zenMenu').innerHTML=ZEN.filter(m=>m[2]===cat).map(m=>
+    `<div onclick="pick('${m[0]}')"><span>${m[1]}${m[7]==='DEPRECATED'?'<span class="dep">deprecated</span>':''}${m[2]==='free'?'<span class="freetag">FREE</span>':''}</span><span class="price">${m[3]==='Free'?'Free':fmt$(m[3])} in / ${m[4]==='Free'?'Free':fmt$(m[4])} out</span></div>`
+  ).join('');
+}
+renderZenMenu();
+function pick(name){
+  document.getElementById('modelSel').value=name;
+  const m=ZEN.find(x=>x[0]===name);
+  if(m) document.getElementById('modelSel').title=m[3]==='Free'?'Free model':('$'+m[3]+' in / $'+m[4]+' out per 1M tokens');
+}
+function sysCount(){document.getElementById('sysLen').textContent=document.getElementById('sysMsg').value.length;}
+
+/* Pricing table (tab 5) */
+(function renderPricing(){
+  const el=document.getElementById('priceTable');
+  if(!el) return;
+  let html='<tr><th>Model</th><th>Category</th><th>Input / 1M</th><th>Output / 1M</th><th>Cached read</th><th>Cached write</th></tr>';
+  for(const cat of cats){
+    html+=`<tr><td colspan="6" style="background:var(--panel2);color:var(--txt-dim);font-size:11px;text-transform:uppercase;letter-spacing:.5px">${CAT_LABEL[cat]}</td></tr>`;
+    for(const m of ZEN.filter(x=>x[2]===cat)){
+      const isFree=m[3]==='Free';
+      html+=`<tr ${isFree?'style="background:rgba(126,226,168,.05)"':''}>
+        <td><code>${m[0]}</code>${m[7]==='DEPRECATED'?'<span class="dep">deprecated Jul 23, 2026</span>':''}${isFree?'<span class="freetag">FREE</span>':''}</td>
+        <td>${CAT_LABEL[cat]}</td>
+        <td>${m[3]==='Free'?'Free':fmt$(m[3])}</td><td>${m[4]==='Free'?'Free':fmt$(m[4])}</td>
+        <td>${m[5]==='Free'?'Free':fmt$(m[5])}</td><td>${m[6]==='Free'?'Free':fmt$(m[6])}</td></tr>`;
+    }
+  }
+  el.innerHTML=html;
+})();
+function keyCheck(v){document.getElementById('ocSubmit').disabled=v.trim().length<4;}
+
+const provMock=[
+ ['⛏','OpenCode Zen',1],['🤖','OpenAI',0],['An','Anthropic',0],['✨','Google AI (Gemini)',0],
+ ['☁️','Azure OpenAI',0],['🤗','Hugging Face',0],['🦙','Ollama',0],['🔶','Amazon Bedrock',0],
+ ['🟢','Together Chat',0],['🐋','DeepSeek',0],['🪶','MiniMax',0],['🌐','OpenRouter',0],['🖥','WebLLM',0]
+];
+document.getElementById('provlistMock').innerHTML=provMock.map(p=>`
+  <div class="prov ${p[2]?'enabled':'disabled'}">
+    <span class="em">${p[0]==='An'?'Anthropic':p[0]}</span>
+    <span class="grow">${p[1]}</span>
+    <span class="badge ${p[2]?'on':'off'}">${p[2]?'ENABLED':'DISABLED'}</span>
+  </div>`).join('');
+</script>
+</body>
+</html>
