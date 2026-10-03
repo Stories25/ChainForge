@@ -94,6 +94,9 @@ ECHO_MODELS = ["echo"]
         # Tells the settings modal which env var / .env key holds the API key,
         # so it can warn when the key is missing (and disable submit).
         "api_key_env": "ECHO_API_KEY",
+        # Fixed gateway endpoint, shown (disabled) in the settings modal when
+        # the key is missing.
+        "base_url": ECHO_BASE_URL,
     },
 )
 def EchoCompletion(
@@ -117,7 +120,7 @@ def EchoCompletion(
     Returns:
         The generated response as a string.
     """
-    api_key = os.environ.get("ECHO_API_KEY")
+    api_key = kwargs.pop("api_key", None) or os.environ.get("ECHO_API_KEY")
     if not api_key:
         raise RuntimeError(
             "No API key found for Echo. "

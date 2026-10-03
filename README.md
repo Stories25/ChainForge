@@ -192,6 +192,25 @@ For more specific details, see our [documentation](https://chainforge.ai/docs/no
 
 ---
 
+# Architecture canvas
+
+`architecture-canvas.html` is an interactive map of how ChainForge fits together: the React UI, the TypeScript engine in the browser, the Flask API, the Python packages, and the services they call. Open it in a browser — it is one file with no dependencies.
+
+Drag to pan, scroll to zoom, click a node to see what it does and where it lives in the repo, and pick one of the flow traces at the bottom to watch a single request travel end to end. The mode buttons show what runs in a local install and what runs on the hosted web app. The address bar keeps your place, so `#node=query.ts` or `#flow=f6` is a link you can share.
+
+The map names files and API routes, so it is checked against the source:
+
+```bash
+python scripts/build_architecture_canvas.py           # refresh the generated facts
+python scripts/build_architecture_canvas.py --check   # fail if the map is stale
+pytest tests/test_architecture_canvas.py              # check every path and route
+node tests/architecture_canvas_smoke.js               # check the page itself
+```
+
+The prose, the layout and the traces are hand-written; only file sizes, route lists and counts are generated. After a rename or a move, run the build script and the tests will tell you if anything was left behind.
+
+---
+
 # Development
 
 ChainForge was created by [Ian Arawjo](http://ianarawjo.com/index.html), a postdoctoral scholar in Harvard HCI's [Glassman Lab](http://glassmanlab.seas.harvard.edu/) with support from the Harvard HCI community. Collaborators include PhD students [Priyan Vaithilingam](https://priyan.info) and [Chelse Swoopes](https://seas.harvard.edu/person/chelse-swoopes), Harvard undergraduate [Sean Yang](https://shawsean.com), and faculty members [Elena Glassman](http://glassmanlab.seas.harvard.edu/glassman.html) and [Martin Wattenberg](https://www.bewitched.com/about.html). Additional collaborators include UC Berkeley PhD student Shreya Shankar and Université de Montréal undergraduate Cassandre Hamel.

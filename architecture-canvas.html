@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChainForge — Architecture Canvas</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #111827;
+    --panel-2: #0f1522;
+    --line: #1f2937;
+    --text: #e5e7eb;
+    --muted: #94a3b8;
+    --faint: #64748b;
+    --accent: #38bdf8;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+    user-select: none;
+  }
+  #stage { position: fixed; inset: 0; cursor: grab; }
+  #stage.panning { cursor: grabbing; }
+  svg.world-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  .node rect.box { rx: 10; ry: 10; fill: #101827; stroke-width: 1.4; }
+  .node { cursor: pointer; }
+  .node .t { font-size: 12.5px; font-weight: 600; fill: var(--text); }
+  .node .s { font-size: 9.8px; fill: var(--muted); font-weight: 400; }
+  .node .big .t { font-size: 14px; }
+  .node:hover rect.box { filter: brightness(1.35); }
+  .node.dim { opacity: 0.16; }
+  .node.lit rect.box { stroke-width: 2.4; }
+  .node.match rect.box { stroke: var(--accent) !important; stroke-width: 2.4; }
+  /* deployment mode: what exists in each way of running ChainForge */
+  .node.hide-mode { opacity: 0.10; }
+  .node.hide-mode rect.box { stroke-dasharray: 4 3; }
+  .group.hide-mode { opacity: 0.28; }
+  .edge.hide-mode { opacity: 0.06; }
+  .edge.lit-mode { stroke: #fbbf24; stroke-width: 2; opacity: 1; }
+
+  .edge { fill: none; stroke: #3d4a5d; stroke-width: 1.3; }
+  .edge.flow { stroke: #0ea5e9; stroke-dasharray: 7 5; animation: dashmove 1.2s linear infinite; opacity: .75; }
+  .edge.dashed { stroke-dasharray: 3 4; }
+  @keyframes dashmove { to { stroke-dashoffset: -24; } }
+  .edge.hover { stroke: #9fb3c8; stroke-width: 2; }
+  .edge.lit { stroke: #22d3ee; stroke-width: 2.4; opacity: 1; }
+  .edge.dim { opacity: 0.07; }
+  .elabel { font-size: 9.5px; fill: #8fa3b8; paint-order: stroke; stroke: var(--bg); stroke-width: 3.5px; }
+  .elabel.dim { opacity: 0.07; }
+  .pulse { fill: #22d3ee; }
+
+  .group rect.frame { rx: 14; ry: 14; fill: rgba(148,163,184,0.035); stroke-width: 1.2; }
+  .group rect.head { fill: transparent; cursor: pointer; }
+  .group .gtitle { font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; fill: var(--text); cursor: pointer; }
+  .group .gsub { font-size: 10px; fill: var(--faint); cursor: pointer; }
+  .group .chev { cursor: pointer; }
+  .group.dim { opacity: 0.25; }
+
+  .lod-sub .node .s { display: none; }
+  .lod-title .node .t { display: none; }
+  .lod-sub .elabel { display: none; }
+
+  /* ---------- chrome ---------- */
+  .hud { position: fixed; z-index: 10; }
+  #topbar {
+    top: 14px; left: 14px; right: 14px;
+    display: flex; align-items: center; gap: 10px;
+    pointer-events: none;
+  }
+  #topbar > * { pointer-events: auto; }
+  .titlecard {
+    background: linear-gradient(180deg, rgba(17,24,39,.92), rgba(17,24,39,.82));
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 8px 14px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  }
+  .titlecard h1 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: .02em; }
+  .titlecard p { margin: 2px 0 0; font-size: 11px; color: var(--muted); }
+  #searchwrap {
+    margin-left: auto; display: flex; align-items: center; gap: 6px;
+    background: rgba(17,24,39,.92); border: 1px solid var(--line); border-radius: 10px;
+    padding: 6px 10px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  }
+  #search {
+    background: transparent; border: none; outline: none; color: var(--text);
+    font-size: 12.5px; width: 210px;
+  }
+  #search::placeholder { color: var(--faint); }
+  #searchcount { font-size: 11px; color: var(--muted); min-width: 54px; text-align: right; }
+
+  #controls {
+    top: 70px; right: 14px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .ctlbtn {
+    width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line);
+    background: rgba(17,24,39,.92); color: var(--text); font-size: 15px; cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0,0,0,.45); line-height: 1;
+  }
+  .ctlbtn:hover { background: #1c2740; }
+  #zoompct {
+    width: 34px; height: 22px; border-radius: 7px; border: 1px solid var(--line);
+    background: rgba(17,24,39,.92); color: var(--muted); font-size: 9.5px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  #flowbar {
+    left: 14px; bottom: 14px; max-width: 62vw;
+    background: rgba(17,24,39,.92); border: 1px solid var(--line); border-radius: 12px;
+    padding: 9px 12px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  }
+  #flowbar .lbl { font-size: 10px; letter-spacing: .08em; color: var(--faint); font-weight: 700; margin-bottom: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 11px; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: #101a2c; color: var(--text);
+  }
+  .chip:hover { border-color: #334155; }
+  .chip.on { background: #06304a; border-color: #22d3ee; color: #a5f3fc; }
+  .chip.clear { background: transparent; color: var(--faint); }
+
+  #legend {
+    left: 14px; bottom: 84px;
+    background: rgba(17,24,39,.92); border: 1px solid var(--line); border-radius: 12px;
+    padding: 9px 12px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  }
+  #legend .lbl { font-size: 10px; letter-spacing: .08em; color: var(--faint); font-weight: 700; margin-bottom: 6px; }
+  #modeswitch { display: flex; flex-direction: column; gap: 4px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .mbtn {
+    font-size: 11px; text-align: left; padding: 5px 9px; border-radius: 7px; cursor: pointer;
+    border: 1px solid var(--line); background: #101a2c; color: var(--muted);
+  }
+  .mbtn:hover { border-color: #334155; color: var(--text); }
+  .mbtn.on { background: #06304a; border-color: #38bdf8; color: #bae6fd; }
+  .lgrow { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); margin: 3px 0; }
+  .lgdot { width: 9px; height: 9px; border-radius: 3px; }
+
+  #minimap {
+    right: 14px; bottom: 14px;
+    background: rgba(17,24,39,.92); border: 1px solid var(--line); border-radius: 12px;
+    padding: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.45); cursor: crosshair;
+  }
+  #minimap svg { display: block; }
+
+  #panel {
+    top: 70px; right: 60px; width: 340px; max-height: calc(100vh - 190px);
+    background: rgba(17,24,39,.96); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 16px 48px rgba(0,0,0,.55); padding: 14px 16px; overflow-y: auto;
+    display: none;
+  }
+  #panel.open { display: block; }
+  #panel h2 { margin: 0 0 2px; font-size: 15px; }
+  #panel .ptag { font-size: 10px; letter-spacing: .07em; font-weight: 700; text-transform: uppercase; }
+  #panel .pdesc { font-size: 12px; line-height: 1.55; color: #cbd5e1; margin: 9px 0 10px; user-select: text; }
+  #panel .psec { font-size: 10px; letter-spacing: .07em; color: var(--faint); font-weight: 700; margin: 10px 0 5px; }
+  .filechip {
+    display: block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 10.5px; background: #0b1120; border: 1px solid #1e293b; color: #93c5fd;
+    border-radius: 6px; padding: 3px 7px; margin: 4px 0; user-select: text; word-break: break-all;
+  }
+  #panel .close {
+    position: absolute; top: 10px; right: 12px; border: none; background: transparent;
+    color: var(--muted); font-size: 15px; cursor: pointer;
+  }
+  .flowchipline { display: flex; flex-wrap: wrap; gap: 5px; }
+
+  #hint {
+    left: 50%; bottom: 14px; transform: translateX(-50%);
+    font-size: 11px; color: var(--faint); background: rgba(17,24,39,.85);
+    border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px;
+    pointer-events: none;
+  }
+  #help {
+    inset: 0; background: rgba(3,7,18,.72); display: none;
+    align-items: center; justify-content: center; z-index: 50;
+  }
+  #help.open { display: flex; }
+  #help .card {
+    width: 420px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 20px 22px; box-shadow: 0 24px 80px rgba(0,0,0,.6);
+  }
+  #help h3 { margin: 0 0 10px; font-size: 15px; }
+  #help table { width: 100%; border-collapse: collapse; font-size: 12px; color: var(--muted); }
+  #help td { padding: 4px 0; }
+  #help td:first-child { color: var(--text); font-family: ui-monospace, Menlo, monospace; font-size: 11px; width: 40%; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<div class="hud" id="topbar">
+  <div class="titlecard">
+    <h1>ChainForge — Architecture Canvas</h1>
+    <p>How the app fits together: React UI → TS engine → Flask API → Python packages → services</p>
+    <p id="stamp"></p>
+  </div>
+  <div id="searchwrap">
+    <input id="search" type="text" placeholder="Search nodes, files, words…" autocomplete="off">
+    <span id="searchcount"></span>
+  </div>
+</div>
+
+<div class="hud" id="controls">
+  <button class="ctlbtn" id="zin"  title="Zoom in (+)">+</button>
+  <button class="ctlbtn" id="zout" title="Zoom out (−)">−</button>
+  <button class="ctlbtn" id="zfit" title="Fit view (0)" style="font-size:12px">⤢</button>
+  <button class="ctlbtn" id="zreset" title="Reset view and clear the link (r)">⟲</button>
+  <button class="ctlbtn" id="zhelp" title="Help (?)" style="font-size:12px">?</button>
+  <div id="zoompct">100%</div>
+</div>
+
+<div class="hud" id="legend">
+  <div class="lgrow"><span class="lgdot" style="background:#3b82f6"></span>Browser — React UI</div>
+  <div class="lgrow"><span class="lgdot" style="background:#a78bfa"></span>Browser — TS engine (src/backend)</div>
+  <div class="lgrow"><span class="lgdot" style="background:#f59e0b"></span>Python server — Flask API</div>
+  <div class="lgrow"><span class="lgdot" style="background:#34d399"></span>Python server — engine packages</div>
+  <div class="lgrow"><span class="lgdot" style="background:#fb7185"></span>External services &amp; disk</div>
+  <div class="lgrow"><span class="lgdot" style="background:#0ea5e9"></span><span style="font-style:italic">dashed = live data flow</span></div>
+  <div class="lbl" style="margin-top:9px">HOW IS IT RUNNING?</div>
+  <div id="modeswitch">
+    <button class="mbtn" data-mode="both">Both ways</button>
+    <button class="mbtn" data-mode="local">Local install</button>
+    <button class="mbtn" data-mode="web">Hosted web (chainforge.ai)</button>
+  </div>
+  <div id="modenote" style="font-size:10.5px;color:var(--faint);margin-top:6px;max-width:210px"></div>
+</div>
+
+<div class="hud" id="flowbar">
+  <div class="lbl">TRACE A DATA FLOW</div>
+  <div class="chips" id="flowchips"></div>
+</div>
+
+<div class="hud" id="minimap"></div>
+
+<div class="hud" id="panel"></div>
+<div class="hud" id="hint">drag to pan · scroll to zoom · click a node for details · click a flow to trace it</div>
+
+<div id="help">
+  <div class="card">
+    <h3>Controls</h3>
+    <table>
+      <tr><td>drag</td><td>Pan the canvas</td></tr>
+      <tr><td>scroll / + / −</td><td>Zoom in and out (at the cursor)</td></tr>
+      <tr><td>0 or ⤢</td><td>Fit everything in view</td></tr>
+      <tr><td>click node</td><td>Show what it does and its real file paths</td></tr>
+      <tr><td>double-click node</td><td>Zoom in on one node</td></tr>
+      <tr><td>click flow chip</td><td>Trace a data flow end to end</td></tr>
+      <tr><td>mode buttons</td><td>Show what runs in a local install and on the hosted web app</td></tr>
+      <tr><td>link</td><td>The address bar keeps #node=… or #flow=… — copy it to share one part</td></tr>
+      <tr><td>click group header</td><td>Collapse or expand a layer</td></tr>
+      <tr><td>search box</td><td>Find nodes by name, file, or word (Enter cycles)</td></tr>
+      <tr><td>minimap</td><td>Click or drag to jump</td></tr>
+      <tr><td>Esc</td><td>Clear selection</td></tr>
+      <tr><td>r</td><td>Reset the view</td></tr>
+    </table>
+    <p style="font-size:11px;color:var(--faint);margin-top:12px">
+      This map was drawn from the real code: chainforge/react-server/src (frontend),
+      chainforge/flask_app.py (API), and the chainforge Python packages.
+    </p>
+    <button class="ctlbtn" id="helpclose" style="width:auto;padding:6px 14px;margin-top:6px">Close</button>
+  </div>
+</div>
+
+<script id="auto-data" type="application/json">
+<!-- AUTO:START — written by scripts/build_architecture_canvas.py. Do not edit by hand. -->
+{
+  "generated": "2026-10-02",
+  "fileLines": {
+    "chainforge/__main__.py": 5,
+    "chainforge/app.py": 121,
+    "chainforge/flask_app.py": 2281,
+    "chainforge/idle_shutdown.py": 111,
+    "chainforge/local_access.py": 110,
+    "chainforge/providers/__init__.py": 2,
+    "chainforge/providers/protocol.py": 234,
+    "chainforge/rag/chunkers.py": 463,
+    "chainforge/rag/embeddings.py": 301,
+    "chainforge/rag/rerankers.py": 278,
+    "chainforge/rag/retrievers.py": 620,
+    "chainforge/rag/vector_stores.py": 949,
+    "chainforge/react-server/src/AiPopover.tsx": 1096,
+    "chainforge/react-server/src/App.tsx": 2181,
+    "chainforge/react-server/src/ChunkNode.tsx": 346,
+    "chainforge/react-server/src/CodeEvaluatorNode.tsx": 973,
+    "chainforge/react-server/src/CommentNode.tsx": 46,
+    "chainforge/react-server/src/ExampleFlowsModal.tsx": 601,
+    "chainforge/react-server/src/FlowSidebar.tsx": 394,
+    "chainforge/react-server/src/GlobalSettingsModal.tsx": 906,
+    "chainforge/react-server/src/InspectorNode.tsx": 128,
+    "chainforge/react-server/src/ItemsNode.tsx": 273,
+    "chainforge/react-server/src/JoinNode.tsx": 637,
+    "chainforge/react-server/src/LLMEvalNode.tsx": 671,
+    "chainforge/react-server/src/MediaNode.tsx": 1115,
+    "chainforge/react-server/src/MultiEvalNode.tsx": 1052,
+    "chainforge/react-server/src/PromptNode.tsx": 1894,
+    "chainforge/react-server/src/RagChatNode.tsx": 820,
+    "chainforge/react-server/src/RerankNode.tsx": 552,
+    "chainforge/react-server/src/RetrievalNode.tsx": 639,
+    "chainforge/react-server/src/ScriptNode.tsx": 119,
+    "chainforge/react-server/src/SimpleEvalNode.tsx": 479,
+    "chainforge/react-server/src/SplitNode.tsx": 416,
+    "chainforge/react-server/src/TabularDataNode.tsx": 914,
+    "chainforge/react-server/src/TextFieldsNode.tsx": 535,
+    "chainforge/react-server/src/UploadNode.tsx": 332,
+    "chainforge/react-server/src/VisNode.tsx": 1573,
+    "chainforge/react-server/src/backend/browserChunkers.ts": 185,
+    "chainforge/react-server/src/backend/browserEmbeddings.ts": 283,
+    "chainforge/react-server/src/backend/browserInference.worker.ts": 46,
+    "chainforge/react-server/src/backend/browserNli.ts": 308,
+    "chainforge/react-server/src/backend/browserRerankers.ts": 282,
+    "chainforge/react-server/src/backend/cache.ts": 1173,
+    "chainforge/react-server/src/backend/docxExtract.ts": 126,
+    "chainforge/react-server/src/backend/evalgen/executor.ts": 1075,
+    "chainforge/react-server/src/backend/extractText.ts": 142,
+    "chainforge/react-server/src/backend/flowLoading.ts": 59,
+    "chainforge/react-server/src/backend/mediaStore.ts": 243,
+    "chainforge/react-server/src/backend/models.ts": 539,
+    "chainforge/react-server/src/backend/nodeRunnerRegistry.ts": 44,
+    "chainforge/react-server/src/backend/pdfExtract.ts": 124,
+    "chainforge/react-server/src/backend/pyodide/exec-py.worker.js": 42,
+    "chainforge/react-server/src/backend/query.ts": 522,
+    "chainforge/react-server/src/backend/runGraph.ts": 228,
+    "chainforge/react-server/src/backend/serverHeartbeat.ts": 71,
+    "chainforge/react-server/src/backend/sessionToken.ts": 197,
+    "chainforge/react-server/src/backend/storagePersistence.ts": 201,
+    "chainforge/react-server/src/backend/template.ts": 581,
+    "chainforge/react-server/src/backend/typing.ts": 348,
+    "chainforge/react-server/src/backend/utils.ts": 4086,
+    "chainforge/react-server/src/example_flows.tsx": 1186,
+    "chainforge/react-server/src/store.tsx": 889,
+    "chainforge/react-server/src/useNodeRunner.ts": 123,
+    "chainforge/security/password_utils.py": 51,
+    "chainforge/security/secure_save.py": 110
+  },
+  "routes": [
+    "/",
+    "/api/exportFlowBundle",
+    "/api/flowExists/\u003cfilename>",
+    "/api/flows",
+    "/api/flows/\u003cfilename>",
+    "/api/getConfig/\u003cname>",
+    "/api/getUniqueFlowFilename",
+    "/api/heartbeat",
+    "/api/importFlowBundle",
+    "/api/proxyImage",
+    "/api/saveConfig/\u003cname>",
+    "/api/sessionToken",
+    "/app/callCustomProvider",
+    "/app/checkRagAvailable",
+    "/app/executepy",
+    "/app/fetchEnvironAPIKeys",
+    "/app/fetchExampleFlow",
+    "/app/fetchOpenAIEval",
+    "/app/initCustomProvider",
+    "/app/loadCachedCustomProviders",
+    "/app/makeFetchCall",
+    "/app/removeCustomProvider",
+    "/chunk",
+    "/examples/\u003cpath:filename>",
+    "/getRetrieveProgress",
+    "/media/\u003cuid>",
+    "/mediaExists/\u003cuid>",
+    "/mediaToText/\u003cuid>",
+    "/rerank",
+    "/retrieve",
+    "/upload"
+  ],
+  "totals": {
+    "files": 65,
+    "routes": 31,
+    "nodes": 74,
+    "edges": 53,
+    "flows": 8
+  }
+}
+<!-- AUTO:END -->
+</script>
+
+<script>
+"use strict";
+/* =====================================================================
+   ChainForge architecture canvas — data
+   Positions are in world units. G = group id. fl = flow edges.
+===================================================================== */
+const GROUPS = [
+  { id:"ui",    x:60,   y:60,  w:1180, h:700,  title:"BROWSER — REACT UI",              sub:"chainforge/react-server/src",              color:"#3b82f6" },
+  { id:"bridge",x:60,   y:820, w:1180, h:530,  title:"BROWSER — TYPESCRIPT ENGINE",     sub:"chainforge/react-server/src/backend",      color:"#a78bfa" },
+  { id:"flask", x:1330, y:60,  w:670,  h:790,  title:"PYTHON SERVER — FLASK API",       sub:"chainforge/flask_app.py · local server",   color:"#f59e0b" },
+  { id:"py",    x:1330, y:910, w:670,  h:540,  title:"PYTHON SERVER — ENGINE PACKAGES", sub:"chainforge/providers · rag · security",    color:"#34d399" },
+  { id:"ext",   x:2090, y:60,  w:420,  h:760,  title:"EXTERNAL SERVICES & DISK",        sub:"outside the app",                          color:"#fb7185" },
+];
+
+const N = (id,g,x,y,w,h,title,sub,desc,files,big) =>
+  ({id,g,x,y,w,h,title,sub,desc,files:files||[],big:!!big});
+
+const NODES = [
+  /* ---------- React UI ---------- */
+  N("app","ui",100,128,220,72,"App.tsx","ReactFlow canvas · node registry · toolbar",
+    "The main React component. Hosts the ReactFlow canvas: it registers every custom node type, builds the toolbar and right-click menus, and mounts the modals.",
+    ["chainforge/react-server/src/App.tsx"],true),
+  N("store","ui",360,128,200,72,"store.tsx","Zustand store — nodes, edges, run status",
+    "Holds the flow state: nodes, edges, selection and run status. ReactFlow is driven from this store with shallow selectors.",
+    ["chainforge/react-server/src/store.tsx"],true),
+  N("p_prompt","ui",100,260,176,64,"PromptNode","prompt template with {vars}",
+    "Prompt template editor. Text with {var} hooks. On run it expands into all permutations and queries the selected LLMs.",
+    ["chainforge/react-server/src/PromptNode.tsx"]),
+  N("p_eval","ui",296,260,176,64,"CodeEvaluatorNode","JS or Python per response",
+    "Runs your code on each upstream response to produce scores, tables or new columns. JavaScript runs in the browser; Python runs in Pyodide or on the server.",
+    ["chainforge/react-server/src/CodeEvaluatorNode.tsx"]),
+  N("p_script","ui",492,260,176,64,"ScriptNode","transform data mid-flow",
+    "A plain Python or JavaScript utility node for reshaping data between nodes.",
+    ["chainforge/react-server/src/ScriptNode.tsx"]),
+  N("p_vis","ui",688,260,176,64,"VisNode","plots of eval results",
+    "Plots evaluation results: histograms, grouped box plots and bar charts across models and prompt parameters.",
+    ["chainforge/react-server/src/VisNode.tsx"]),
+  N("p_inspect","ui",884,260,176,64,"InspectorNode","response table · export",
+    "A table view of upstream responses. This is also the node behind 'Export Data' (xlsx, csv, json).",
+    ["chainforge/react-server/src/InspectorNode.tsx"]),
+  N("p_fields","ui",100,350,176,64,"TextFieldsNode","manual text inputs",
+    "Manual text inputs that become template variables for prompts.",
+    ["chainforge/react-server/src/TextFieldsNode.tsx"]),
+  N("p_items","ui",296,350,176,64,"ItemsNode","list of items as a variable",
+    "A list of items as one variable — for example few-shot examples or question sets.",
+    ["chainforge/react-server/src/ItemsNode.tsx"]),
+  N("p_table","ui",492,350,176,64,"TabularDataNode","CSV / Excel datasets",
+    "Imports datasets (CSV, Excel, TSV) as flow inputs. Often used for ground-truth evaluation columns.",
+    ["chainforge/react-server/src/TabularDataNode.tsx"]),
+  N("p_join","ui",688,350,176,64,"JoinNode","merge upstream streams",
+    "Merges several upstream outputs into one stream of responses.",
+    ["chainforge/react-server/src/JoinNode.tsx"]),
+  N("p_split","ui",884,350,176,64,"SplitNode","branch a stream",
+    "Splits a stream into branches so each downstream node can get a copy.",
+    ["chainforge/react-server/src/SplitNode.tsx"]),
+  N("p_multieval","ui",100,440,176,64,"MultiEvalNode","many quick checks at once",
+    "Runs several preset checks at once: contains, regex, numeric compare, and more.",
+    ["chainforge/react-server/src/MultiEvalNode.tsx"]),
+  N("p_llmeval","ui",296,440,176,64,"LLMEvalNode","LLM-as-judge",
+    "Uses another LLM as a judge to grade or label responses.",
+    ["chainforge/react-server/src/LLMEvalNode.tsx"]),
+  N("p_simpleeval","ui",492,440,176,64,"SimpleEvalNode","quick metric presets",
+    "Quick metric presets on responses, with no code needed.",
+    ["chainforge/react-server/src/SimpleEvalNode.tsx"]),
+  N("p_upload","ui",688,440,176,64,"UploadNode","documents & media in",
+    "Upload point for documents and media. Feeds RAG pipelines or prompt variables.",
+    ["chainforge/react-server/src/UploadNode.tsx"]),
+  N("p_media","ui",884,440,176,64,"MediaNode","show images / audio",
+    "Shows images or audio inline in the flow.",
+    ["chainforge/react-server/src/MediaNode.tsx"]),
+  N("p_chunk","ui",100,530,176,64,"ChunkNode","chunk documents",
+    "Chunks documents with the server /chunk route or with the in-browser chunkers.",
+    ["chainforge/react-server/src/ChunkNode.tsx"]),
+  N("p_retrieval","ui",296,530,176,64,"RetrievalNode","keyword · semantic · vector",
+    "Retrieves chunks by BM25, TF-IDF, semantic search or vector indexes.",
+    ["chainforge/react-server/src/RetrievalNode.tsx"]),
+  N("p_rerank","ui",492,530,176,64,"RerankNode","rerank retrieved chunks",
+    "Reranks retrieved chunks with server rerankers or in-browser NLI.",
+    ["chainforge/react-server/src/RerankNode.tsx"]),
+  N("p_ragchat","ui",688,530,176,64,"RagChatNode","chat over your pipeline",
+    "A chat box over a retrieval pipeline. Each question re-runs the flow through the runGraph machinery.",
+    ["chainforge/react-server/src/RagChatNode.tsx"]),
+  N("p_comment","ui",884,530,176,64,"CommentNode","sticky note",
+    "A sticky note for the flow canvas.",
+    ["chainforge/react-server/src/CommentNode.tsx"]),
+  N("p_settings","ui",100,630,176,56,"GlobalSettingsModal","API keys · providers · theme",
+    "The settings dialog: API keys, provider list, theme and app options.",
+    ["chainforge/react-server/src/GlobalSettingsModal.tsx"]),
+  N("p_sidebar","ui",296,630,176,56,"FlowSidebar","saved flows list",
+    "Lists saved flows. Open, save, rename, duplicate or delete them.",
+    ["chainforge/react-server/src/FlowSidebar.tsx"]),
+  N("p_examples","ui",492,630,176,56,"ExampleFlowsModal","bundled example flows",
+    "Loads the bundled example flows, including 188 flows generated from OpenAI evals.",
+    ["chainforge/react-server/src/ExampleFlowsModal.tsx","chainforge/react-server/src/example_flows.tsx"]),
+  N("p_aipop","ui",688,630,176,56,"AiPopover","in-context genAI helpers",
+    "In-place AI helpers, such as generating values for a template variable.",
+    ["chainforge/react-server/src/AiPopover.tsx"]),
+  N("p_evalgen","ui",884,630,176,56,"EvalGen/","AI writes your evaluator",
+    "Turns a plain-language spec into evaluator code, then runs and edits it.",
+    ["chainforge/react-server/src/EvalGen/"]),
+
+  /* ---------- TS engine ---------- */
+  N("d_template","bridge",100,888,176,64,"template.ts","PromptTemplate · permutations",
+    "Parses {vars} out of prompt text and generates the cross-product of all variable values.",
+    ["chainforge/react-server/src/backend/template.ts"]),
+  N("d_query","bridge",296,888,176,64,"query.ts","run one node: expand · call · merge",
+    "The heart of execution. Builds permutations, checks caches, calls LLMs with rate limits, merges responses and pings downstream nodes.",
+    ["chainforge/react-server/src/backend/query.ts"]),
+  N("d_models","bridge",492,888,176,64,"models.ts","LLM classes · rate limiter",
+    "One LLM class per vendor, model settings schemas, a rate limiter, and native WebLLM support.",
+    ["chainforge/react-server/src/backend/models.ts"]),
+  N("d_utils","bridge",688,888,176,64,"utils.ts","call_llm · route_fetch",
+    "call_llm and route_fetch: a fetch goes straight out in web builds, or through the Flask proxy when served locally. Also response extraction and merging.",
+    ["chainforge/react-server/src/backend/utils.ts"]),
+  N("d_cache","bridge",884,888,176,64,"cache.ts","StorageCache (localStorage)",
+    "A localStorage cache for responses and media, keyed by content hashes, so runs are fast and cheap to repeat.",
+    ["chainforge/react-server/src/backend/cache.ts"]),
+  N("d_rungraph","bridge",100,984,176,64,"runGraph.ts","programmatic run ordering",
+    "Orders and sequences node runs so a driver (chat, run-all) can push data through a flow. Reports ok / failed / cancelled / skipped.",
+    ["chainforge/react-server/src/backend/runGraph.ts"]),
+  N("d_registry","bridge",296,984,176,64,"nodeRunnerRegistry.ts","who can run what",
+    "A registry where each node publishes its run function for drivers to await.",
+    ["chainforge/react-server/src/backend/nodeRunnerRegistry.ts"]),
+  N("d_usenode","bridge",492,984,176,64,"useNodeRunner.ts","hooks that publish runners",
+    "React hooks that wrap node run logic so it can be awaited, with status tracked in a ref.",
+    ["chainforge/react-server/src/useNodeRunner.ts"]),
+  N("d_flowload","bridge",688,984,176,64,"flowLoading.ts","load · migrate flows",
+    "Loads flows from the server, a web share link or localStorage, and handles migration and media re-linking.",
+    ["chainforge/react-server/src/backend/flowLoading.ts"]),
+  N("d_persist","bridge",884,984,176,64,"storagePersistence.ts","quota & persistence",
+    "Asks the browser for persistent storage and reports free space.",
+    ["chainforge/react-server/src/backend/storagePersistence.ts"]),
+  N("d_media","bridge",100,1080,176,64,"mediaStore.ts","media blob store",
+    "Stores media blobs in IndexedDB or localStorage and maps them to server /media URLs.",
+    ["chainforge/react-server/src/backend/mediaStore.ts"]),
+  N("d_extract","bridge",296,1080,176,64,"extractText.ts","pdf.js · docx · fallbacks",
+    "Client-side text extraction from PDFs, DOCX and other formats; falls back to the server when needed.",
+    ["chainforge/react-server/src/backend/extractText.ts","chainforge/react-server/src/backend/pdfExtract.ts","chainforge/react-server/src/backend/docxExtract.ts"]),
+  N("d_heartbeat","bridge",492,1080,176,64,"serverHeartbeat.ts","keep-alive pings",
+    "Pings /api/heartbeat so the local server knows a tab is still open. No tabs → the server shuts itself down.",
+    ["chainforge/react-server/src/backend/serverHeartbeat.ts"]),
+  N("d_session","bridge",688,1080,176,64,"sessionToken.ts","per-session token",
+    "Holds the session token that every local request must present.",
+    ["chainforge/react-server/src/backend/sessionToken.ts"]),
+  N("d_typing","bridge",884,1080,176,64,"typing.ts","shared types",
+    "Shared TypeScript types: LLMResponse, ChatHistory, ModelSettingsDict and friends.",
+    ["chainforge/react-server/src/backend/typing.ts"]),
+  N("d_pyworker","bridge",100,1176,200,72,"Pyodide worker","Python sandbox in the browser",
+    "Runs evaluator Python inside a WebWorker via Pyodide, so code evals work even with no server.",
+    ["chainforge/react-server/src/backend/pyodide/exec-py.worker.js"],true),
+  N("d_infworker","bridge",320,1176,200,72,"Inference worker","in-browser ML off-thread",
+    "A WebWorker that runs the small in-browser models (embeddings, NLI, rerank) off the main thread.",
+    ["chainforge/react-server/src/backend/browserInference.worker.ts"],true),
+  N("d_browserai","bridge",540,1176,280,72,"Browser AI modules","chunkers · embeddings · NLI · rerank · retrieve",
+    "browserChunkers, browserEmbeddings, browserNli, browserRerankers, browserRetrieve: RAG that runs fully client-side on small models fetched on first use.",
+    ["chainforge/react-server/src/backend/browserChunkers.ts","chainforge/react-server/src/backend/browserEmbeddings.ts","chainforge/react-server/src/backend/browserNli.ts","chainforge/react-server/src/backend/browserRerankers.ts"],true),
+  N("d_evalgen","bridge",840,1176,220,72,"evalgen/","AI-generated evaluators",
+    "Executes and manages AI-generated evaluator code in a controlled scope.",
+    ["chainforge/react-server/src/backend/evalgen/executor.ts"],true),
+
+  /* ---------- Flask API ---------- */
+  N("f_main","flask",1370,128,590,72,"flask_app.py","every route · guards every request",
+    "The whole REST API in one file (about 2,300 lines): flows, Python exec, fetch proxy, custom providers, uploads, RAG and config. Before each request it checks host, origin and session token.",
+    ["chainforge/flask_app.py"],true),
+  N("f_access","flask",1370,232,137,56,"local_access.py","host · origin · token",
+    "Request security: allowed hosts, origin checks and session tokens. Stops other websites and DNS rebinding.",
+    ["chainforge/local_access.py"]),
+  N("f_ssave","flask",1517,232,137,56,"secure_save.py","atomic JSON writes",
+    "Safe, atomic JSON persistence for flows and configs.",
+    ["chainforge/security/secure_save.py"]),
+  N("f_pwd","flask",1664,232,137,56,"password_utils.py","password hashing",
+    "Password hashing for protected saves.",
+    ["chainforge/security/password_utils.py"]),
+  N("f_idle","flask",1811,232,137,56,"idle_shutdown.py","watchdog",
+    "Shuts the local server down when no tab pings the heartbeat.",
+    ["chainforge/idle_shutdown.py"]),
+  N("f_flows","flask",1370,328,286,76,"Flows API","/api/flows CRUD · export · import",
+    "Lists, loads and saves flows. Also exports and imports .cforge bundles (zip + media).",
+    ["chainforge/flask_app.py — /api/flows, /api/exportFlowBundle"]),
+  N("f_exec","flask",1674,328,286,76,"Exec route","POST /app/executepy",
+    "Runs user Python on the server: code evaluators and custom provider scripts.",
+    ["chainforge/flask_app.py — /app/executepy"]),
+  N("f_proxy","flask",1370,428,286,76,"Fetch proxy","POST /app/makeFetchCall",
+    "The server fetches LLM APIs on behalf of the browser. This avoids CORS problems and injects API keys from the environment.",
+    ["chainforge/flask_app.py — /app/makeFetchCall"]),
+  N("f_custom","flask",1674,428,286,76,"Custom providers","init · load · call · remove",
+    "Routes that install and call custom Python provider scripts written by users.",
+    ["chainforge/flask_app.py — /app/initCustomProvider, /app/callCustomProvider"]),
+  N("f_media","flask",1370,528,286,76,"Upload & media","/upload · /media/<uid> · /mediaToText",
+    "Stores uploaded files and turns them into text with MarkItDown (a core dependency).",
+    ["chainforge/flask_app.py — /upload, /media/<uid>, /mediaToText"]),
+  N("f_rag","flask",1674,528,286,76,"RAG routes","POST /chunk · /retrieve · /rerank",
+    "The server-side RAG endpoints, plus progress polling. Registered even when the optional RAG extra is missing.",
+    ["chainforge/flask_app.py — /chunk, /retrieve, /rerank"]),
+  N("f_config","flask",1370,628,286,76,"Config & keys","getConfig · saveConfig · env keys",
+    "Reads and writes named configs, and reports which API keys exist in the environment.",
+    ["chainforge/flask_app.py — /api/getConfig, /app/fetchEnvironAPIKeys"]),
+  N("f_session","flask",1674,628,286,76,"Session & heartbeat","/api/sessionToken · /api/heartbeat",
+    "Issues the session token for the tab and accepts keep-alive pings.",
+    ["chainforge/flask_app.py — /api/sessionToken, /api/heartbeat"]),
+  N("f_boot","flask",1370,736,590,56,"app.py · __main__.py","CLI entrypoint — `chainforge serve`",
+    "Boots the Flask server, opens the browser and starts the idle watchdog.",
+    ["chainforge/app.py","chainforge/__main__.py"]),
+
+  /* ---------- Python packages ---------- */
+  N("y_providers","py",1370,978,286,76,"providers/","ProviderRegistry · @provider",
+    "The custom provider protocol and registry. User provider scripts run here and are exposed back to the UI as model options.",
+    ["chainforge/providers/__init__.py","chainforge/providers/protocol.py"]),
+  N("y_security","py",1674,978,286,76,"security/","passwords · safe saves",
+    "Password hashing and safe-save helpers used by the flows API.",
+    ["chainforge/security/"]),
+  N("y_chunk","py",1370,1094,286,64,"rag/chunkers.py","chunking registry",
+    "Chunking methods: chonkie, recursive, token-based and more.",
+    ["chainforge/rag/chunkers.py"]),
+  N("y_retrieval","py",1674,1094,286,64,"rag/retrievers.py","BM25 · TF-IDF · semantic · FAISS",
+    "Retrieval methods, from keyword search to vector search over persistent indexes.",
+    ["chainforge/rag/retrievers.py"]),
+  N("y_rerank","py",1370,1186,286,64,"rag/rerankers.py","cross-encoders · RRF fusion",
+    "Reranking methods: cross-encoders, NLI and fusion (RRF, weighted average).",
+    ["chainforge/rag/rerankers.py"]),
+  N("y_embed","py",1674,1186,286,64,"rag/embeddings.py","embedding registry",
+    "Embedding methods: sentence-transformers locally or provider APIs.",
+    ["chainforge/rag/embeddings.py"]),
+  N("y_vector","py",1370,1278,286,64,"rag/vector_stores.py","LanceDB · FAISS indexes",
+    "Creates, opens and queries persistent vector indexes on disk.",
+    ["chainforge/rag/vector_stores.py"]),
+  N("y_examples","py",1674,1278,286,64,"examples/ · oaievals/","bundled flows & benchmarks",
+    "Example flows shipped with the app, plus 188 flows generated from OpenAI evals.",
+    ["chainforge/examples/","chainforge/oaievals/"]),
+
+  /* ---------- External ---------- */
+  N("x_llm","ext",2130,128,320,84,"LLM provider APIs","hosted models",
+    "OpenAI, Anthropic, Google Gemini, DeepSeek, HuggingFace, Together, OpenRouter, Azure and Bedrock — called with the user's keys, from the browser or through the proxy.",
+    [],true),
+  N("x_ollama","ext",2130,248,320,64,"Ollama","locally hosted models",
+    "Local models at localhost:11434, listed like any other provider.",
+    []),
+  N("x_browserai","ext",2130,344,320,72,"Browser AI models","WebLLM · transformers.js",
+    "Small models downloaded into the browser on first use. This is how RAG and some evals work with zero install.",
+    [],true),
+  N("x_disk","ext",2130,452,320,72,"User data dir","flows · media · configs",
+    "The OS user-data folder (via platformdirs) where saved flows, media and configs live.",
+    [],true),
+  N("x_vector","ext",2130,560,320,64,"Vector stores on disk","LanceDB · FAISS",
+    "Persistent vector indexes created by the retrieval pipeline.",
+    []),
+  N("x_hf","ext",2130,660,320,64,"HuggingFace Hub","model weights",
+    "Where embedding and reranker weights are fetched from on first use.",
+    []),
+];
+
+const EDGES = [
+  /* UI internals */
+  { s:"app", t:"store", l:"reads & writes flow state" },
+  { s:"p_prompt", t:"d_template", l:"prompt text + {vars}" },
+  { s:"p_eval", t:"d_pyworker", l:"eval code (browser)" },
+  { s:"p_eval", t:"d_utils", l:"eval code (server)" },
+  { s:"p_prompt", t:"d_usenode", l:"publishes its runner" },
+  { s:"p_upload", t:"d_media" },
+  { s:"p_evalgen", t:"d_evalgen" },
+
+  /* bridge internals */
+  { s:"d_template", t:"d_query" },
+  { s:"d_query", t:"d_models" },
+  { s:"d_query", t:"d_cache", l:"cache hits & merges" },
+  { s:"d_models", t:"d_utils", l:"call_llm · route_fetch" },
+  { s:"d_query", t:"store", l:"responses land in nodes", dash:true },
+  { s:"d_usenode", t:"d_registry" },
+  { s:"d_registry", t:"d_rungraph" },
+  { s:"d_evalgen", t:"d_models", l:"AI helper calls" },
+  { s:"store", t:"d_flowload", l:"serialize flow" },
+
+  /* bridge → flask */
+  { s:"d_utils", t:"f_proxy", l:"POST /app/makeFetchCall", flow:true },
+  { s:"d_utils", t:"f_exec", l:"POST /app/executepy" },
+  { s:"d_utils", t:"f_custom", l:"call custom provider" },
+  { s:"d_flowload", t:"f_flows", l:"GET / PUT /api/flows" },
+  { s:"d_media", t:"f_media", l:"POST /upload" },
+  { s:"d_extract", t:"f_media", l:"server fallback" },
+  { s:"p_chunk", t:"f_rag", l:"POST /chunk" },
+  { s:"p_retrieval", t:"f_rag", l:"POST /retrieve" },
+  { s:"p_rerank", t:"f_rag", l:"POST /rerank" },
+  { s:"p_ragchat", t:"f_rag" },
+  { s:"d_heartbeat", t:"f_session", l:"keep-alive" },
+  { s:"d_session", t:"f_session", l:"token header" },
+
+  /* bridge → external (direct) */
+  { s:"d_models", t:"x_llm", l:"direct fetch (web build)", flow:true },
+  { s:"d_browserai", t:"x_browserai", l:"models on first use", flow:true },
+  { s:"d_models", t:"x_browserai", l:"web-llm engine", flow:true },
+
+  /* flask internals */
+  { s:"f_main", t:"f_access", l:"every request" },
+
+  /* flask → python */
+  { s:"f_exec", t:"y_providers" },
+  { s:"f_custom", t:"y_providers", l:"provider scripts" },
+  { s:"f_proxy", t:"x_llm", l:"server-side fetch", flow:true },
+  { s:"f_rag", t:"y_chunk" },
+  { s:"f_rag", t:"y_retrieval" },
+  { s:"f_rag", t:"y_rerank" },
+  { s:"f_rag", t:"y_embed" },
+  { s:"f_flows", t:"y_security", l:"atomic writes" },
+  { s:"f_media", t:"x_disk", l:"media + text" },
+  { s:"y_security", t:"x_disk", l:"flows & configs" },
+
+  /* python → external */
+  { s:"y_providers", t:"x_llm", l:"SDK calls", flow:true },
+  { s:"y_providers", t:"x_ollama", l:"localhost:11434", flow:true },
+  { s:"y_retrieval", t:"y_vector", l:"open / query index" },
+  { s:"y_vector", t:"y_rerank", l:"candidates", dash:true },
+  { s:"y_vector", t:"x_vector" },
+  { s:"y_embed", t:"x_hf", l:"weights" },
+  { s:"y_rerank", t:"x_hf", l:"weights", dash:true },
+
+  /* rag node chain (conceptual) */
+  { s:"y_chunk", t:"p_retrieval", l:"chunks", dash:true },
+  { s:"p_chunk", t:"d_browserai", l:"in-browser chunking", dash:true },
+  { s:"p_retrieval", t:"d_browserai", l:"in-browser retrieval", dash:true },
+  { s:"y_rerank", t:"p_ragchat", l:"reranked context", dash:true },
+];
+
+/* Data flows you can trace. Each entry is a chain of node ids;
+   consecutive pairs highlight the edge between them. */
+const FLOWS = [
+  { id:"f1", name:"① Query an LLM (local install)", chains:[
+    ["p_prompt","d_template","d_query","d_models","d_utils","f_proxy","x_llm"],
+    ["d_query","d_cache"],
+    ["d_query","store"],
+  ]},
+  { id:"f2", name:"② Query an LLM (web build)", chains:[
+    ["p_prompt","d_template","d_query","d_models","x_llm"],
+    ["d_models","d_utils"],
+  ]},
+  { id:"f3", name:"③ Evaluate Python (browser)", chains:[
+    ["p_eval","d_pyworker"],
+  ]},
+  { id:"f4", name:"④ Evaluate Python (server)", chains:[
+    ["p_eval","d_utils","f_exec","y_providers"],
+  ]},
+  { id:"f5", name:"⑤ Save & load flows", chains:[
+    ["store","d_flowload","f_flows","y_security","x_disk"],
+  ]},
+  { id:"f6", name:"⑥ RAG pipeline (server)", chains:[
+    ["p_upload","d_media","f_media","x_disk"],
+    ["p_chunk","f_rag","y_chunk","p_retrieval"],
+    ["p_retrieval","f_rag","y_retrieval","y_vector","y_rerank","p_ragchat"],
+  ]},
+  { id:"f7", name:"⑦ Browser-native RAG", chains:[
+    ["p_chunk","d_browserai","x_browserai"],
+    ["p_retrieval","d_browserai","x_browserai"],
+  ]},
+  { id:"f8", name:"⑧ Custom provider", chains:[
+    ["d_utils","f_custom","y_providers","x_llm"],
+  ]},
+];
+
+/* =====================================================================
+   Layout + rendering
+===================================================================== */
+const W_W = 2600, W_H = 1560;          // world size
+const stage = document.getElementById("stage");
+const svg = document.createElementNS("http://www.w3.org/2000/svg","svg");
+svg.setAttribute("class","world-svg");
+stage.appendChild(svg);
+
+const defs = svg.appendChild(document.createElementNS("http://www.w3.org/2000/svg","defs"));
+defs.innerHTML =
+  '<pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">' +
+    '<circle cx="1.4" cy="1.4" r="1.2" fill="#1b2436"/></pattern>' +
+  '<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">' +
+    '<path d="M0,0 L10,5 L0,10 z" fill="#3d4a5d"/></marker>' +
+  '<marker id="arrFlow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">' +
+    '<path d="M0,0 L10,5 L0,10 z" fill="#0ea5e9"/></marker>' +
+  '<marker id="arrLit" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">' +
+    '<path d="M0,0 L10,5 L0,10 z" fill="#22d3ee"/></marker>';
+
+const world = document.createElementNS("http://www.w3.org/2000/svg","g");
+svg.appendChild(world);
+
+const grid = document.createElementNS("http://www.w3.org/2000/svg","rect");
+grid.setAttribute("x",-2000); grid.setAttribute("y",-2000);
+grid.setAttribute("width",W_W+6000); grid.setAttribute("height",W_H+6000);
+grid.setAttribute("fill","url(#dots)");
+grid.setAttribute("pointer-events","none");
+world.appendChild(grid);
+
+const nodeById = new Map(NODES.map(n => [n.id,n]));
+const groupById = new Map(GROUPS.map(g => [g.id,g]));
+
+/* ---- generated facts (file sizes, routes) written by the build script ---- */
+const AUTO = (() => {
+  const el = document.getElementById("auto-data");
+  if (!el) return {generated:null, fileLines:{}, routes:[], totals:{}};
+  try {
+    // A browser keeps an HTML comment as raw text inside this block, so strip
+    // any before parsing.
+    return JSON.parse(el.textContent.replace(/<!--[\s\S]*?-->/g, ""));
+  } catch (_) {
+    console.warn("architecture canvas: AUTO block is not valid JSON");
+    return {generated:null, fileLines:{}, routes:[], totals:{}};
+  }
+})();
+const linesOf = p => (AUTO.fileLines && AUTO.fileLines[p]) || 0;
+
+(function stampTitle(){
+  const el = document.getElementById("stamp");
+  if (!el) return;
+  const files = NODES.reduce((a,n) => a + n.files.filter(f => linesOf(f)).length, 0);
+  el.textContent = AUTO.generated
+    ? `built from the source · ${NODES.length} parts · ${AUTO.totals.routes || 0} API routes · generated ${AUTO.generated}`
+    : `${NODES.length} parts · run scripts/build_architecture_canvas.py to add file sizes`;
+})();
+
+/* ---- group frames ---- */
+const gElems = new Map();
+const groupLayer = document.createElementNS("http://www.w3.org/2000/svg","g");
+world.appendChild(groupLayer);
+const collapsed = new Set();
+
+function renderGroups(){
+  groupLayer.innerHTML = "";
+  for (const g of GROUPS){
+    const el = document.createElementNS("http://www.w3.org/2000/svg","g");
+    el.setAttribute("class","group");
+    const isCol = collapsed.has(g.id);
+    const h = isCol ? 46 : g.h;
+    const frame = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    frame.setAttribute("class","frame");
+    frame.setAttribute("x",g.x); frame.setAttribute("y",g.y);
+    frame.setAttribute("width",g.w); frame.setAttribute("height",h);
+    frame.setAttribute("stroke",g.color);
+    el.appendChild(frame);
+
+    const title = document.createElementNS("http://www.w3.org/2000/svg","text");
+    title.setAttribute("class","gtitle");
+    title.setAttribute("x",g.x+18); title.setAttribute("y",g.y+26);
+    title.setAttribute("fill",g.color);
+    title.textContent = g.title;
+    el.appendChild(title);
+
+    const sub = document.createElementNS("http://www.w3.org/2000/svg","text");
+    sub.setAttribute("class","gsub");
+    sub.setAttribute("x",g.x+18); sub.setAttribute("y",g.y+42);
+    sub.textContent = g.sub + (isCol ? "  ·  collapsed" : "");
+    el.appendChild(sub);
+
+    const chev = document.createElementNS("http://www.w3.org/2000/svg","path");
+    const cx = g.x+g.w-30, cy = g.y+22;
+    chev.setAttribute("class","chev");
+    chev.setAttribute("d", isCol ? `M${cx-6},${cy-4} L${cx},${cy+4} L${cx+6},${cy-4}` : `M${cx-6},${cy+4} L${cx},${cy-4} L${cx+6},${cy+4}`);
+    chev.setAttribute("stroke",g.color); chev.setAttribute("stroke-width",2);
+    chev.setAttribute("fill","none"); chev.setAttribute("stroke-linecap","round");
+    el.appendChild(chev);
+
+    const hit = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    hit.setAttribute("x",g.x); hit.setAttribute("y",g.y);
+    hit.setAttribute("width",g.w); hit.setAttribute("height",30);
+    hit.setAttribute("fill","transparent");
+    hit.style.cursor = "pointer";
+    hit.addEventListener("click", e => {
+      e.stopPropagation();
+      if (suppressClick) return;      // a drag over the header must not fold the layer
+      collapsed.has(g.id) ? collapsed.delete(g.id) : collapsed.add(g.id);
+      renderGroups(); renderNodes(); renderEdges(); updateMinimap();
+      if (activeFlow) applyFlowHighlight(activeFlow);
+      applyMode();
+      applySearch();
+    });
+    el.appendChild(hit);
+
+    gElems.set(g.id, el);
+    groupLayer.appendChild(el);
+  }
+}
+
+/* ---- nodes ---- */
+const nElems = new Map();
+const nodeLayer = document.createElementNS("http://www.w3.org/2000/svg","g");
+world.appendChild(nodeLayer);
+
+function nodeVisible(n){
+  return !collapsed.has(n.g);
+}
+
+function renderNodes(){
+  nodeLayer.innerHTML = "";
+  nElems.clear();
+  for (const n of NODES){
+    if (collapsed.has(n.g)) continue;   // hide children of collapsed groups
+    const g = groupById.get(n.g);
+    const el = document.createElementNS("http://www.w3.org/2000/svg","g");
+    el.setAttribute("class","node" + (n.big ? " big" : ""));
+    el.dataset.id = n.id;
+
+    const box = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    box.setAttribute("class","box");
+    box.setAttribute("x",n.x); box.setAttribute("y",n.y);
+    box.setAttribute("width",n.w); box.setAttribute("height",n.h);
+    box.setAttribute("stroke",g.color);
+    el.appendChild(box);
+
+    const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+    t.setAttribute("class","t");
+    t.setAttribute("x",n.x+12); t.setAttribute("y",n.y + (n.h>=68?26:22));
+    t.textContent = n.title;
+    el.appendChild(t);
+
+    const s = document.createElementNS("http://www.w3.org/2000/svg","text");
+    s.setAttribute("class","s");
+    s.setAttribute("x",n.x+12); s.setAttribute("y",n.y + (n.h>=68?45:40));
+    s.textContent = n.sub;
+    el.appendChild(s);
+
+    el.addEventListener("click", e => { e.stopPropagation(); if (suppressClick) return; selectNode(n.id); });
+    el.addEventListener("dblclick", e => { e.stopPropagation(); if (suppressClick) return; zoomToNode(n, 1); });
+    nElems.set(n.id, el);
+    nodeLayer.appendChild(el);
+  }
+}
+
+/* ---- edges ---- */
+const edgeLayer = document.createElementNS("http://www.w3.org/2000/svg","g");
+const labelLayer = document.createElementNS("http://www.w3.org/2000/svg","g");
+world.appendChild(edgeLayer);
+world.appendChild(labelLayer);
+
+const edgeElems = new Map();   // "s->t" -> {path, label}
+const edgeKey = (s,t) => s+"->"+t;
+
+function anchor(n, side, off){
+  const cx = n.x+n.w/2, cy = n.y+n.h/2;
+  if (side==="r") return [n.x+n.w, cy+off];
+  if (side==="l") return [n.x, cy+off];
+  if (side==="b") return [cx+off, n.y+n.h];
+  return [cx+off, n.y];
+}
+
+function edgeSides(s, t){
+  const dx = (t.x+t.w/2)-(s.x+s.w/2), dy = (t.y+t.h/2)-(s.y+s.h/2);
+  if (Math.abs(dx) >= Math.abs(dy))
+    return { horiz:true, sSide: dx>=0?"r":"l", tSide: dx>=0?"l":"r" };
+  return { horiz:false, sSide: dy>=0?"b":"t", tSide: dy>=0?"t":"b" };
+}
+
+function renderEdges(){
+  edgeLayer.innerHTML = ""; labelLayer.innerHTML = "";
+  edgeElems.clear();
+
+  // Spread anchors when several edges share one side of a node, and skip
+  // edges that live entirely inside a collapsed group.
+  const seen = new Map();
+  const counts = new Map();
+  const key2 = (id,side) => id+"|"+side;
+  const pairKey = (s,t,side) => s+"|"+t+"|"+side;
+  const live = [];
+  for (const e of EDGES){
+    const s = nodeById.get(e.s), t = nodeById.get(e.t);
+    if (!s || !t) continue;
+    if (collapsed.has(s.g) && collapsed.has(t.g)) continue;
+    if (s.g === t.g && collapsed.has(s.g)) continue;
+    const {sSide, tSide} = edgeSides(s,t);
+    for (const [id,side] of [[e.s,sSide],[e.t,tSide]]){
+      const k = key2(id,side);
+      const i = counts.get(k)||0;
+      counts.set(k, i+1);
+      seen.set(pairKey(e.s,e.t,side), i);
+    }
+    live.push(e);
+  }
+
+  for (const e of live){
+    const s = nodeById.get(e.s), t = nodeById.get(e.t);
+    const {horiz, sSide, tSide} = edgeSides(s,t);
+    const sN = counts.get(key2(e.s,sSide)), tN = counts.get(key2(e.t,tSide));
+    const sI = seen.get(pairKey(e.s,e.t,sSide))||0;
+    const tI = seen.get(pairKey(e.s,e.t,tSide))||0;
+    const sOff = sN>1 ? (sI-(sN-1)/2)*14 : 0;
+    const tOff = tN>1 ? (tI-(tN-1)/2)*14 : 0;
+    const [x1,y1] = anchor(s,sSide,sOff);
+    const [x2,y2] = anchor(t,tSide,tOff);
+    let d;
+    if (horiz){
+      const m = Math.max(Math.abs(x2-x1)/2, 40);
+      d = `M${x1},${y1} C${x1+m},${y1} ${x2-m},${y2} ${x2},${y2}`;
+    } else {
+      const m = Math.max(Math.abs(y2-y1)/2, 40);
+      d = `M${x1},${y1} C${x1},${y1+m} ${x2},${y2-m} ${x2},${y2}`;
+    }
+    const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+    path.setAttribute("class","edge"+(e.flow?" flow":"")+(e.dash?" dashed":""));
+    path.setAttribute("d",d);
+    path.setAttribute("marker-end", e.flow ? "url(#arrFlow)" : "url(#arr)");
+    edgeLayer.appendChild(path);
+
+    let label = null;
+    if (e.l){
+      label = document.createElementNS("http://www.w3.org/2000/svg","text");
+      label.setAttribute("class","elabel");
+      label.setAttribute("text-anchor","middle");
+      label.setAttribute("x",(x1+x2)/2);
+      label.setAttribute("y",(y1+y2)/2 - 6);
+      label.textContent = e.l;
+      labelLayer.appendChild(label);
+    }
+    path.addEventListener("mouseenter", () => path.classList.add("hover"));
+    path.addEventListener("mouseleave", () => path.classList.remove("hover"));
+    edgeElems.set(edgeKey(e.s,e.t), {
+      path, label, s:e.s, t:e.t,
+      server: groupById.get(s.g).id === "flask" || groupById.get(s.g).id === "py" ||
+              groupById.get(t.g).id === "flask" || groupById.get(t.g).id === "py",
+    });
+  }
+}
+
+/* ---- pulses for the active flow ---- */
+const pulseLayer = document.createElementNS("http://www.w3.org/2000/svg","g");
+world.appendChild(pulseLayer);
+
+function renderPulses(flow){
+  pulseLayer.innerHTML = "";
+  if (!flow) return;
+  let delay = 0;
+  for (const chain of flow.chains){
+    for (let i=0;i<chain.length-1;i++){
+      const rec = edgeElems.get(edgeKey(chain[i],chain[i+1]));
+      if (!rec) continue;
+      const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      c.setAttribute("class","pulse");
+      c.setAttribute("r",3.4);
+      const am = document.createElementNS("http://www.w3.org/2000/svg","animateMotion");
+      am.setAttribute("dur","2.4s");
+      am.setAttribute("begin",(delay*0.18).toFixed(2)+"s");
+      am.setAttribute("repeatCount","indefinite");
+      am.setAttribute("path", rec.path.getAttribute("d"));
+      c.appendChild(am);
+      pulseLayer.appendChild(c);
+      delay++;
+    }
+  }
+}
+
+/* =====================================================================
+   View state: pan & zoom
+===================================================================== */
+const view = { x:0, y:0, k:1 };
+const MIN_K = 0.08, MAX_K = 4;
+const VIEW_KEY = "chainforge-architecture-canvas:view";
+
+let saveTimer = null;
+function saveView(){
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem(VIEW_KEY, JSON.stringify(view)); } catch (_) {}
+  }, 400);
+}
+function loadView(){
+  try {
+    const raw = localStorage.getItem(VIEW_KEY);
+    if (!raw) return false;
+    const v = JSON.parse(raw);
+    if (typeof v.x !== "number" || typeof v.y !== "number" || typeof v.k !== "number") return false;
+    view.x = v.x; view.y = v.y; view.k = Math.min(MAX_K, Math.max(MIN_K, v.k));
+    return true;
+  } catch (_) { return false; }
+}
+function forgetView(){
+  try { localStorage.removeItem(VIEW_KEY); } catch (_) {}
+}
+
+function applyView(){
+  world.setAttribute("transform", `translate(${view.x},${view.y}) scale(${view.k})`);
+  document.getElementById("zoompct").textContent = Math.round(view.k*100)+"%";
+  world.classList.toggle("lod-sub", view.k < 0.5);
+  world.classList.toggle("lod-title", view.k < 0.22);
+  updateMinimapViewport();
+  saveView();
+}
+
+function zoomAt(factor, cx, cy){
+  const k2 = Math.min(MAX_K, Math.max(MIN_K, view.k*factor));
+  const r = k2/view.k;
+  view.x = cx - (cx-view.x)*r;
+  view.y = cy - (cy-view.y)*r;
+  view.k = k2;
+  applyView();
+}
+
+function fitView(){
+  const pad = 40;
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  for (const g of GROUPS){
+    minX=Math.min(minX,g.x); minY=Math.min(minY,g.y);
+    maxX=Math.max(maxX,g.x+g.w); maxY=Math.max(maxY,g.y+g.h);
+  }
+  const k = Math.min((innerWidth-pad*2)/(maxX-minX), (innerHeight-pad*2)/(maxY-minY));
+  view.k = Math.min(MAX_K, Math.max(MIN_K,k));
+  view.x = (innerWidth - (maxX-minX)*view.k)/2 - minX*view.k;
+  view.y = (innerHeight - (maxY-minY)*view.k)/2 - minY*view.k;
+  applyView();
+}
+
+function zoomToNode(n, targetK){
+  view.k = targetK || Math.max(view.k, 0.9);
+  view.x = innerWidth/2 - (n.x+n.w/2)*view.k;
+  view.y = innerHeight/2 - (n.y+n.h/2)*view.k;
+  applyView();
+}
+
+svg.addEventListener("wheel", e => {
+  e.preventDefault();
+  const rect = svg.getBoundingClientRect();
+  zoomAt(e.deltaY<0 ? 1.12 : 1/1.12, e.clientX-rect.left, e.clientY-rect.top);
+},{passive:false});
+
+/* Pointer pan (+ touch pinch).
+   The pointer is captured only after it has moved past DRAG_SLOP. Capturing on
+   pointerdown would move the click target to #stage and swallow every node click,
+   because a captured pointer retargets the follow-up mouse events. */
+const DRAG_SLOP = 4;
+const pointers = new Map();
+let panStart = null, pinchDist = null;
+let suppressClick = false;   // set after a drag, so the drag does not select
+
+stage.addEventListener("pointerdown", e => {
+  if (e.target.closest("#panel")) return;
+  suppressClick = false;
+  pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if (pointers.size === 1){
+    panStart = {x:e.clientX, y:e.clientY, vx:view.x, vy:view.y, captured:false, moved:false};
+    stage.classList.add("panning");
+  } else if (pointers.size === 2){
+    const [a,b] = [...pointers.values()];
+    pinchDist = Math.hypot(a.x-b.x,a.y-b.y);
+    panStart = null;
+    suppressClick = true;
+  }
+});
+stage.addEventListener("pointermove", e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if (pointers.size === 2 && pinchDist){
+    const [a,b] = [...pointers.values()];
+    const d = Math.hypot(a.x-b.x,a.y-b.y);
+    if (d > 0){
+      zoomAt(d/pinchDist, (a.x+b.x)/2, (a.y+b.y)/2);
+      pinchDist = d;
+    }
+    return;
+  }
+  if (panStart){
+    const dx = e.clientX-panStart.x, dy = e.clientY-panStart.y;
+    if (!panStart.moved && Math.hypot(dx,dy) > DRAG_SLOP){
+      panStart.moved = true;
+      suppressClick = true;
+      try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+    if (panStart.moved){
+      view.x = panStart.vx + dx;
+      view.y = panStart.vy + dy;
+      applyView();
+    }
+  }
+});
+function endPointer(e){
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinchDist = null;
+  if (pointers.size === 0){ panStart = null; stage.classList.remove("panning"); }
+}
+stage.addEventListener("pointerup", endPointer);
+stage.addEventListener("pointercancel", endPointer);
+stage.addEventListener("click", e => {
+  // The dot grid covers the whole world, so `target === svg` is never true.
+  // Clear the selection on any click that did not land on a node.
+  if (suppressClick) return;
+  if (!e.target.closest || !e.target.closest(".node")) clearSelection();
+});
+
+/* keyboard */
+addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") {
+    if (e.key === "Escape") e.target.blur();
+    return;
+  }
+  const step = 80;
+  if (e.key==="+"||e.key==="=") zoomAt(1.2, innerWidth/2, innerHeight/2);
+  else if (e.key==="-"||e.key==="_") zoomAt(1/1.2, innerWidth/2, innerHeight/2);
+  else if (e.key==="0"||e.key==="f") fitView();
+  else if (e.key==="ArrowLeft") { view.x+=step; applyView(); }
+  else if (e.key==="ArrowRight"){ view.x-=step; applyView(); }
+  else if (e.key==="ArrowUp")   { view.y+=step; applyView(); }
+  else if (e.key==="ArrowDown") { view.y-=step; applyView(); }
+  else if (e.key==="Escape") clearSelection();
+  else if (e.key==="r") { clearSelection(); forgetView(); fitView(); }
+  else if (e.key==="?") document.getElementById("help").classList.toggle("open");
+});
+document.getElementById("zin").onclick = () => zoomAt(1.2, innerWidth/2, innerHeight/2);
+document.getElementById("zout").onclick = () => zoomAt(1/1.2, innerWidth/2, innerHeight/2);
+document.getElementById("zfit").onclick = fitView;
+document.getElementById("zreset").onclick = () => {
+  clearSelection(); forgetView(); fitView();
+};
+document.getElementById("zhelp").onclick = () => document.getElementById("help").classList.add("open");
+document.getElementById("helpclose").onclick = () => document.getElementById("help").classList.remove("open");
+document.getElementById("help").addEventListener("click", e => {
+  if (e.target.id === "help") e.currentTarget.classList.remove("open");
+});
+addEventListener("resize", () => { applyView(); });
+
+/* =====================================================================
+   Selection, detail panel, flow tracing, search
+===================================================================== */
+const panel = document.getElementById("panel");
+let selected = null, activeFlow = null;
+
+const GROUP_LABEL = {
+  ui:"Browser — React UI", bridge:"Browser — TS engine",
+  flask:"Python server — Flask API", py:"Python server — engine packages",
+  ext:"External services & disk",
+};
+
+function clearSelection(){
+  selected = null; activeFlow = null;
+  panel.classList.remove("open");
+  setFlowChip(null);
+  applyFlowHighlight(null);
+  applySearch();
+  writeHash();
+}
+
+/* The address bar carries the current spot, so one part of the map can be
+   shared as a link: #node=query.ts or #flow=f6. */
+function writeHash(){
+  let h = "";
+  if (selected) h = "#node=" + selected;
+  else if (activeFlow) h = "#flow=" + activeFlow.id;
+  try {
+    if (location.hash !== h) history.replaceState(null, "", h || location.pathname + location.search);
+  } catch (_) {}
+}
+
+function readHash(){
+  const h = (location.hash || "").replace(/^#/, "");
+  if (!h) return false;
+  const [k, v] = h.split("=");
+  if (k === "node" && nodeById.has(v)){
+    selectNode(v);
+    zoomToNode(nodeById.get(v));
+    return true;
+  }
+  if (k === "flow" && FLOWS.some(f => f.id === v)){
+    setFlow(v);
+    return true;
+  }
+  return false;
+}
+
+addEventListener("hashchange", () => {
+  const h = (location.hash || "").replace(/^#/, "");
+  if (!h){ clearSelection(); return; }
+  readHash();
+});
+
+function selectNode(id){
+  const n = nodeById.get(id);
+  if (!n) return;
+  selected = id;
+  const g = groupById.get(n.g);
+  const flows = FLOWS.filter(f => f.chains.some(c => c.includes(id)));
+  panel.innerHTML =
+    '<button class="close" title="Close">✕</button>' +
+    `<div class="ptag" style="color:${g.color}">${GROUP_LABEL[n.g]}</div>` +
+    `<h2>${n.title}</h2>` +
+    `<div class="pdesc">${n.desc}</div>` +
+    (n.files.length ? '<div class="psec">IN THE REPO</div>' + n.files.map(f => {
+        const L = linesOf(f);
+        return `<span class="filechip">${f}${L ? ` <span style="color:#64748b">· ${L} lines</span>` : ""}</span>`;
+      }).join("") : "") +
+    (flows.length ? '<div class="psec">PART OF FLOWS</div><div class="flowchipline">' +
+      flows.map(f=>`<span class="chip" data-flow="${f.id}">${f.name}</span>`).join("") + '</div>' : "");
+  panel.classList.add("open");
+  panel.querySelector(".close").onclick = clearSelection;
+  panel.querySelectorAll("[data-flow]").forEach(ch => {
+    ch.onclick = () => setFlow(ch.dataset.flow);
+  });
+  applyFlowHighlight(activeFlow);
+  applySearch();
+  writeHash();
+}
+
+function applyFlowHighlight(flow){
+  const litNodes = new Set(), litEdges = new Set();
+  if (flow){
+    for (const chain of flow.chains)
+      for (const id of chain) litNodes.add(id);
+    for (const chain of flow.chains)
+      for (let i=0;i<chain.length-1;i++) litEdges.add(edgeKey(chain[i],chain[i+1]));
+  }
+  for (const [id,el] of nElems){
+    el.classList.toggle("lit", !!flow && litNodes.has(id));
+    el.classList.toggle("dim", !!flow && !litNodes.has(id));
+  }
+  for (const g of gElems.values()) g.classList.toggle("dim", !!flow);
+  for (const [key,rec] of edgeElems){
+    rec.path.classList.toggle("lit", !!flow && litEdges.has(key));
+    rec.path.classList.toggle("dim", !!flow && !litEdges.has(key));
+    if (rec.label) rec.label.classList.toggle("dim", !!flow && !litEdges.has(key));
+  }
+  renderPulses(flow);
+  applyMode();
+}
+
+function setFlow(id){
+  if (!id || (activeFlow && activeFlow.id===id)){ setFlowChip(null); applyFlowHighlight(null); activeFlow=null; writeHash(); return; }
+  activeFlow = FLOWS.find(f=>f.id===id);
+  setFlowChip(id);
+  applyFlowHighlight(activeFlow);
+  writeHash();
+}
+
+function setFlowChip(id){
+  document.querySelectorAll("#flowchips .chip").forEach(c =>
+    c.classList.toggle("on", c.dataset.flow===id));
+}
+
+/* =====================================================================
+   Deployment mode: what exists in each way of running ChainForge
+   A local install runs the Flask server, so Python code evals, the fetch
+   proxy and the server RAG stack are all available. The hosted web app has
+   no server: Python runs in Pyodide, RAG runs in browser workers, and LLM
+   calls go straight out to the provider.
+===================================================================== */
+let mode = "both";
+const MODE_NOTE = {
+  both: "Everything shown. Pick a mode to see what a local install keeps.",
+  local: "Local install: the Flask server is present. Python evals, the fetch proxy and the server RAG stack all work.",
+  web: "Hosted web: there is no server. Dashed parts stay: Pyodide for Python, in-browser RAG, and a direct call to the provider.",
+};
+
+function applyMode(){
+  const web = mode === "web", local = mode === "local";
+  for (const [id, el] of nElems){
+    const g = nodeById.get(id).g;
+    const server = g === "flask" || g === "py";
+    el.classList.toggle("hide-mode", web && server);
+    el.classList.remove("lit-mode");
+  }
+  // Only the two server layers go quiet on the hosted web app. The browser
+  // layers stay: they run in both deployments.
+  for (const [gid, el] of gElems)
+    el.classList.toggle("hide-mode", web && (gid === "flask" || gid === "py"));
+  for (const rec of edgeElems.values()){
+    rec.path.classList.toggle("hide-mode", web && rec.server);
+    rec.path.classList.toggle("lit-mode", local && rec.server);
+    if (rec.label) rec.label.classList.toggle("hide-mode", web && rec.server);
+  }
+  const note = document.getElementById("modenote");
+  if (note) note.textContent = MODE_NOTE[mode];
+}
+
+document.querySelectorAll("#modeswitch .mbtn").forEach(b => {
+  b.onclick = () => {
+    mode = b.dataset.mode;
+    document.querySelectorAll("#modeswitch .mbtn").forEach(x => x.classList.toggle("on", x===b));
+    applyFlowHighlight(activeFlow);
+    applyMode();
+    applySearch();
+  };
+  b.classList.toggle("on", b.dataset.mode === "both");
+});
+
+const chipWrap = document.getElementById("flowchips");
+for (const f of FLOWS){
+  const c = document.createElement("span");
+  c.className = "chip"; c.dataset.flow = f.id; c.textContent = f.name;
+  c.onclick = () => setFlow(f.id);
+  chipWrap.appendChild(c);
+}
+const clearChip = document.createElement("span");
+clearChip.className = "chip clear"; clearChip.textContent = "clear ✕";
+clearChip.onclick = clearSelection;
+chipWrap.appendChild(clearChip);
+
+/* search */
+const searchEl = document.getElementById("search");
+const searchCount = document.getElementById("searchcount");
+let matches = [], matchIdx = 0;
+
+function applySearch(){
+  const q = searchEl.value.trim().toLowerCase();
+  matches = [];
+  for (const [id,el] of nElems){
+    const n = nodeById.get(id);
+    const hay = (n.title+" "+n.sub+" "+n.desc+" "+n.files.join(" ")).toLowerCase();
+    const hit = q && hay.includes(q);
+    el.classList.toggle("match", !!hit);
+    if (hit) matches.push(id);
+  }
+  if (!q){ searchCount.textContent = ""; return; }
+  searchCount.textContent = matches.length + " found";
+}
+searchEl.addEventListener("input", () => { matchIdx = 0; applySearch(); zoomToMatch(false); });
+searchEl.addEventListener("keydown", e => {
+  if (e.key==="Enter" && matches.length){
+    matchIdx = (matchIdx+1) % matches.length;
+    zoomToMatch(true);
+  }
+});
+function zoomToMatch(zoom){
+  if (!matches.length) return;
+  const id = matches[matchIdx];
+  for (const [i,el] of nElems) el.classList.remove("lit");
+  nElems.get(id)?.classList.add("lit");
+  selectNodeSilent(id);
+  if (zoom) zoomToNode(nodeById.get(id));
+}
+function selectNodeSilent(id){
+  selectNode(id);
+}
+
+/* =====================================================================
+   Minimap
+===================================================================== */
+const MM_W = 224, MM_H = 134;
+const minimap = document.getElementById("minimap");
+const msvg = document.createElementNS("http://www.w3.org/2000/svg","svg");
+msvg.setAttribute("width",MM_W); msvg.setAttribute("height",MM_H);
+minimap.appendChild(msvg);
+const ms = Math.min(MM_W / W_W, MM_H / W_H);   // uniform scale, both dims fit
+const mLayer = document.createElementNS("http://www.w3.org/2000/svg","g");
+msvg.appendChild(mLayer);
+const mView = document.createElementNS("http://www.w3.org/2000/svg","rect");
+mView.setAttribute("fill","rgba(56,189,248,0.12)");
+mView.setAttribute("stroke","#38bdf8");
+mView.setAttribute("stroke-width","1");
+mView.setAttribute("rx","2");
+msvg.appendChild(mView);
+
+function updateMinimap(){
+  mLayer.innerHTML = "";
+  for (const g of GROUPS){
+    const r = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    r.setAttribute("x",g.x*ms); r.setAttribute("y",g.y*ms);
+    r.setAttribute("width",g.w*ms); r.setAttribute("height",(collapsed.has(g.id)?46:g.h)*ms);
+    r.setAttribute("fill",g.color+"22");
+    r.setAttribute("stroke",g.color);
+    r.setAttribute("stroke-width","0.6");
+    r.setAttribute("rx","2");
+    mLayer.appendChild(r);
+  }
+}
+function updateMinimapViewport(){
+  const wx = -view.x/view.k, wy = -view.y/view.k;
+  const ww = innerWidth/view.k, wh = innerHeight/view.k;
+  mView.setAttribute("x",wx*ms); mView.setAttribute("y",wy*ms);
+  mView.setAttribute("width",ww*ms); mView.setAttribute("height",wh*ms);
+}
+function minimapJump(e){
+  const rect = msvg.getBoundingClientRect();
+  const wx = (e.clientX-rect.left)/ms, wy = (e.clientY-rect.top)/ms;
+  view.x = innerWidth/2 - wx*view.k;
+  view.y = innerHeight/2 - wy*view.k;
+  applyView();
+}
+let mmDrag = false;
+minimap.addEventListener("pointerdown", e => { mmDrag = true; minimapJump(e); });
+addEventListener("pointermove", e => { if (mmDrag) minimapJump(e); });
+addEventListener("pointerup", () => mmDrag = false);
+
+/* =====================================================================
+   Boot
+===================================================================== */
+renderGroups();
+renderNodes();
+renderEdges();
+updateMinimap();
+if (!readHash() && !loadView()) fitView();
+applyView();
+applyMode();
+</script>
+</body>
+</html>
