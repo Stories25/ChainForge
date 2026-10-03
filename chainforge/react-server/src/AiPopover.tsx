@@ -1,4 +1,10 @@
-import React, { useCallback, useContext, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   Stack,
   NumberInput,
@@ -12,6 +18,7 @@ import {
   Alert,
   Divider,
   Tooltip,
+  Select,
 } from "@mantine/core";
 import {
   autofill,
@@ -19,6 +26,8 @@ import {
   generateColumn,
   generateAndReplace,
   AIError,
+  getAIFeaturesModelOptions,
+  getAIFeaturesModelProviders,
   getAIFeaturesModels,
   generateAndReplaceTable,
 } from "./backend/ai";
@@ -31,7 +40,7 @@ import {
   INFO_EXAMPLE_JS,
   INFO_EXAMPLE_PY,
 } from "./CodeEvaluatorNode";
-import { queryLLM } from "./backend/backend";
+import { queryLLM, fetchEnvironAPIKeys } from "./backend/backend";
 import { splitText } from "./SplitNode";
 import { escapeBraces } from "./backend/template";
 import {
@@ -46,6 +55,7 @@ import {
 } from "./backend/typing";
 import { v4 as uuidv4 } from "uuid";
 import { StringLookup } from "./backend/cache";
+import { zenModelDropdownLabel } from "./zenModels";
 
 const zeroGap = { gap: "0rem" };
 const popoverShadow = "rgb(38, 57, 77) 0px 10px 30px -14px";
@@ -138,6 +148,68 @@ export const buildContextPromptForVarsMetavars = (context: VarsContext) => {
   return context_str;
 };
 
+// The provider and model the generative AI features query. Both live in the
+// global store because several popovers read them; the picker below is the only
+// place they are written.
+export function useAIFeaturesModel() {
+  const provider = useStore((state) => state.aiFeaturesProvider);
+  const model = useStore((state) => state.aiFeaturesModel);
+  const setProvider = useStore((state) => state.setAIFeaturesProvider);
+  const setModel = useStore((state) => state.setAIFeaturesModel);
+
+  // Models offered by the chosen provider. Recomputed only when it changes.
+  const modelOptions = useMemo(
+    () => getAIFeaturesModelOptions(provider),
+    [provider],
+  );
+
+  // Keep the model legal for its provider. A stored model can be stale: the
+  // catalogue changes, and a flow saved under a different provider would
+  // otherwise leave the dropdown showing something that provider does not have.
+  useEffect(() => {
+    if (modelOptions.length === 0) return;
+    if (modelOptions.some((o) => o.value === model)) return;
+    setModel(modelOptions[0].value);
+  }, [modelOptions, model, setModel]);
+
+  const onProviderChange = useCallback(
+    (next: string | null) => {
+      if (!next) return;
+      setProvider(next);
+      // Jump to that provider's newest model, which is the first option.
+      const options = getAIFeaturesModelOptions(next);
+      if (options.length > 0) setModel(options[0].value);
+    },
+    [setProvider, setModel],
+  );
+
+  return { provider, model, setModel, modelOptions, onProviderChange };
+}
+
+// Checks the Zen key on the server. The Zen provider reads OPENCODE_API_KEY from
+// the Flask process's environment, not from the browser key store, so the
+// OpenAI-key check this replaced could never have been the right test.
+function useMissingZenKey(): string | null {
+  const [missing, setMissing] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchEnvironAPIKeys()
+      .then((keys) => {
+        if (cancelled) return;
+        setMissing(keys?.OPENCODE_API_KEY ? null : "OPENCODE_API_KEY");
+      })
+      .catch(() => {
+        /* Can't tell; let the call itself surface any problem. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return missing;
+}
+
 // The generic popover button, a sparkly purple button that shows a popover with 'Generative AI' back on top.
 // Extend for specific implementations .
 export function AIPopover({
@@ -147,71 +219,9 @@ export function AIPopover({
   children: React.ReactNode;
 }) {
   const [opened, setOpened] = useState(false);
-  // API keys
-  const apiKeys = useStore((state) => state.apiKeys);
-  const aiFeaturesProvider = useStore((state) => state.aiFeaturesProvider);
-
-  // To check for provider selection and credentials/api keys
-  const invalidAIFeaturesSetup = useMemo(() => {
-    if (!aiFeaturesProvider) {
-      return (
-        <Alert
-          variant="light"
-          color="grape"
-          title="No provider selected"
-          mt="xs"
-          maw={200}
-          fz="xs"
-          icon={<IconAlertCircle />}
-        >
-          You need to select a model in the settings to use this feature
-        </Alert>
-      );
-    } else if (
-      apiKeys &&
-      aiFeaturesProvider.toLowerCase().includes("openai") &&
-      !apiKeys.OpenAI
-    ) {
-      return (
-        <Alert
-          variant="light"
-          color="grape"
-          title="No OpenAI API key detected"
-          mt="xs"
-          maw={200}
-          fz="xs"
-          icon={<IconAlertCircle />}
-        >
-          You must set an OpenAI API key before you can use generative AI
-          support features.
-        </Alert>
-      );
-    } else if (
-      apiKeys &&
-      aiFeaturesProvider.toLowerCase().includes("bedrock") &&
-      !(
-        apiKeys.AWS_Access_Key_ID &&
-        apiKeys.AWS_Secret_Access_Key &&
-        apiKeys.AWS_Session_Token
-      )
-    ) {
-      return (
-        <Alert
-          variant="light"
-          color="grape"
-          title="No AWS Credentials detected"
-          mt="xs"
-          maw={200}
-          fz="xs"
-          icon={<IconAlertCircle />}
-        >
-          You must set temporary AWS Credentials before you can use generative
-          AI support features.
-        </Alert>
-      );
-    }
-    return undefined;
-  }, [apiKeys, aiFeaturesProvider]);
+  const { provider, model, setModel, modelOptions, onProviderChange } =
+    useAIFeaturesModel();
+  const missingKey = useMissingZenKey();
 
   return (
     <Popover
@@ -239,9 +249,48 @@ export function AIPopover({
             variant="light"
             leftSection={<IconSparkles size={10} stroke={3} />}
           >
-            Generative AI ({aiFeaturesProvider ?? "None"})
+            Generative AI
           </Badge>
-          {invalidAIFeaturesSetup || children}
+
+          <Select
+            size="xs"
+            label="Provider"
+            dropdownPosition="bottom"
+            withinPortal
+            allowDeselect={false}
+            data={getAIFeaturesModelProviders()}
+            value={provider}
+            onChange={onProviderChange}
+          />
+          <Select
+            size="xs"
+            label="Model"
+            description={zenModelDropdownLabel(model)}
+            dropdownPosition="bottom"
+            withinPortal
+            allowDeselect={false}
+            data={modelOptions}
+            value={model}
+            onChange={(next) => next && setModel(next)}
+          />
+
+          {missingKey && (
+            <Alert
+              variant="light"
+              color="grape"
+              title={`No ${missingKey} detected`}
+              mt="xs"
+              maw={200}
+              fz="xs"
+              icon={<IconAlertCircle />}
+            >
+              Set {missingKey} in the environment ChainForge runs in, or in a
+              .env file next to the project, before using generative AI
+              features.
+            </Alert>
+          )}
+
+          {children}
         </Stack>
       </Popover.Dropdown>
     </Popover>
@@ -283,9 +332,9 @@ export function AIGenReplaceTablePopover({
   areValuesLoading,
   setValuesLoading,
 }: AIGenReplaceTablePopoverProps) {
-  // API keys and provider
+  // API keys and the selected Zen model
   const apiKeys = useStore((state) => state.apiKeys);
-  const aiFeaturesProvider = useStore((state) => state.aiFeaturesProvider);
+  const aiFeaturesModel = useStore((state) => state.aiFeaturesModel);
 
   // Alert context
   const showAlert = useContext(AlertModalContext);
@@ -335,7 +384,7 @@ export function AIGenReplaceTablePopover({
       const generatedTable = await generateAndReplaceTable(
         generateAndReplacePrompt,
         generateAndReplaceNumber,
-        aiFeaturesProvider,
+        aiFeaturesModel,
         apiKeys,
       );
 
@@ -394,7 +443,7 @@ export function AIGenReplaceTablePopover({
       const result = await autofillTable(
         tableInput,
         commandFillNumber,
-        aiFeaturesProvider,
+        aiFeaturesModel,
         apiKeys,
       );
 
@@ -446,7 +495,7 @@ export function AIGenReplaceTablePopover({
       const generatedColumn = await generateColumn(
         tableInput,
         generateColumnPrompt,
-        aiFeaturesProvider,
+        aiFeaturesModel,
         apiKeys,
       );
 
@@ -605,10 +654,9 @@ export function AIGenReplaceItemsPopover({
   areValuesLoading,
   setValuesLoading,
 }: AIGenReplaceItemsPopoverProps) {
-  // API keys
+  // API keys and the selected Zen model
   const apiKeys = useStore((state) => state.apiKeys);
-
-  const aiFeaturesProvider = useStore((state) => state.aiFeaturesProvider);
+  const aiFeaturesModel = useStore((state) => state.aiFeaturesModel);
 
   // Alerts
   const showAlert = useContext(AlertModalContext);
@@ -643,12 +691,7 @@ export function AIGenReplaceItemsPopover({
   const handleCommandFill = () => {
     setIsCommandFillLoading(true);
     setDidCommandFillError(false);
-    autofill(
-      Object.values(values),
-      commandFillNumber,
-      aiFeaturesProvider,
-      apiKeys,
-    )
+    autofill(Object.values(values), commandFillNumber, aiFeaturesModel, apiKeys)
       .then(onAddValues)
       .catch((e) => {
         if (e instanceof AIError) {
@@ -669,7 +712,7 @@ export function AIGenReplaceItemsPopover({
       generateAndReplacePrompt,
       generateAndReplaceNumber,
       genDiverseOutputs,
-      aiFeaturesProvider,
+      aiFeaturesModel,
       apiKeys,
     )
       .then(onReplaceValues)
@@ -854,9 +897,9 @@ export function AIGenCodeEvaluatorPopover({
   context,
   currentEvalCode,
 }: AIGenCodeEvaluatorPopoverProps) {
-  // API keys
+  // API keys and the selected Zen model
   const apiKeys = useStore((state) => state.apiKeys);
-  const aiFeaturesProvider = useStore((state) => state.aiFeaturesProvider);
+  const aiFeaturesModel = useStore((state) => state.aiFeaturesModel);
 
   // State
   const [replacePrompt, setReplacePrompt] = useState("");
@@ -897,7 +940,7 @@ export function AIGenCodeEvaluatorPopover({
 
     queryLLM(
       replacePrompt,
-      getAIFeaturesModels(aiFeaturesProvider).large,
+      getAIFeaturesModels(aiFeaturesModel).large,
       1,
       escapeBraces(template),
       {},
@@ -973,7 +1016,7 @@ ${currentEvalCode}
 
     queryLLM(
       editPrompt,
-      getAIFeaturesModels(aiFeaturesProvider).large,
+      getAIFeaturesModels(aiFeaturesModel).large,
       1,
       escapeBraces(template),
       {},

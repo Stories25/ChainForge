@@ -63,14 +63,14 @@ const EvalGenWizard: React.FC<EvalGenWizardProps> = ({
 
   // From global state
   const apiKeys = useStore((state) => state.apiKeys);
-  const genAIFeaturesProvider = useStore((state) => state.aiFeaturesProvider);
+  const genAIFeaturesModel = useStore((state) => state.aiFeaturesModel);
   const genAIModelNames = useMemo(() => {
-    const models = getAIFeaturesModels(genAIFeaturesProvider);
+    const models = getAIFeaturesModels(genAIFeaturesModel);
     return {
       large: models.large,
       small: models.small,
     };
-  }, [genAIFeaturesProvider]);
+  }, [genAIFeaturesModel]);
 
   // Regroup input responses by batch UID, whenever jsonResponses changes
   const batchedResponses = useMemo(

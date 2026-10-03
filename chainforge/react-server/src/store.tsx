@@ -161,9 +161,11 @@ export interface StoreHandles {
   apiKeys: Dict<string>;
   setAPIKeys: (apiKeys: Dict<string>) => void;
 
-  // Provider for genAI features
+  // Provider and model for genAI features, both OpenCode Zen
   aiFeaturesProvider: string;
+  aiFeaturesModel: string;
   setAIFeaturesProvider: (llmProvider: string) => void;
+  setAIFeaturesModel: (model: string) => void;
 
   // Global settings (flags) from the settings menu
   globalSettings: Dict<JSONCompatible>;
@@ -280,9 +282,17 @@ const useStore = create<StoreHandles>((set, get) => ({
     set({ customRetrievers: items as any });
   },
 
-  aiFeaturesProvider: "OpenAI",
+  aiFeaturesProvider: "Free models",
   setAIFeaturesProvider: (llmProvider) => {
     set({ aiFeaturesProvider: llmProvider });
+  },
+
+  // The Zen model the generative AI features query. Defaults to Space Bunny
+  // Free: it costs nothing, and it is the one free Zen model that answers from
+  // outside a first-party OpenCode session.
+  aiFeaturesModel: "space-bunny-free",
+  setAIFeaturesModel: (model) => {
+    set({ aiFeaturesModel: model });
   },
 
   // Keeping track of LLM API keys

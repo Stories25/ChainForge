@@ -39,7 +39,12 @@ import { Dropzone, FileWithPath } from "@mantine/dropzone";
 import useStore, { initLLMProviderMenu, initLLMProviders } from "./store";
 import { APP_IS_RUNNING_LOCALLY } from "./backend/utils";
 import { setCustomProviders } from "./ModelSettingSchemas";
-import { getAIFeaturesModelProviders } from "./backend/ai";
+import {
+  AI_FEATURES_DEFAULT_PROVIDER,
+  getAIFeaturesModelOptions,
+  getAIFeaturesModelProviders,
+} from "./backend/ai";
+import { zenProviderInfo } from "./zenModels";
 import {
   CustomLLMProviderSpec,
   Dict,
@@ -55,6 +60,11 @@ import {
 } from "./backend/backend";
 import { AlertModalContext } from "./AlertModal";
 import { ColorSchemeToggle } from "./ColorThemeProvider";
+
+// "Free models" is the label for the default provider category.
+const AI_FEATURES_DEFAULT_PROVIDER_LABEL =
+  zenProviderInfo(AI_FEATURES_DEFAULT_PROVIDER)?.label ??
+  AI_FEATURES_DEFAULT_PROVIDER;
 
 // Type for the non-form (non-sensitive) settings
 interface GlobalSettingsType {
@@ -397,6 +407,8 @@ const GlobalSettingsModal = forwardRef<GlobalSettingsModalRef, object>(
     const setAIFeaturesProvider = useStore(
       (state) => state.setAIFeaturesProvider,
     );
+    const aiFeaturesModel = useStore((state) => state.aiFeaturesModel);
+    const setAIFeaturesModel = useStore((state) => state.setAIFeaturesModel);
     const setAvailableLLMs = useStore((state) => state.setAvailableLLMs);
     const setFavorites = useStore((state) => state.setFavorites);
     const nodes = useStore((state) => state.nodes);
@@ -768,13 +780,24 @@ const GlobalSettingsModal = forwardRef<GlobalSettingsModalRef, object>(
                   />
                   <Select
                     label="LLM Provider"
-                    description="The LLM provider to use for generative AI features. Currently only supports OpenAI, which queries the gpt-4o models. You must have set the relevant API key to use the provider."
+                    description="The OpenCode Zen provider to use for generative AI features. The model is picked below; both are also selectable from the Generative AI button on a node."
                     dropdownPosition="bottom"
                     withinPortal
-                    defaultValue={getAIFeaturesModelProviders()[0]}
+                    allowDeselect={false}
+                    defaultValue={AI_FEATURES_DEFAULT_PROVIDER_LABEL}
                     data={getAIFeaturesModelProviders()}
                     value={aiFeaturesProvider}
-                    onChange={setAIFeaturesProvider}
+                    onChange={(next) => next && setAIFeaturesProvider(next)}
+                  ></Select>
+                  <Select
+                    label="GenAI Model"
+                    description="Defaults to Space Bunny Free. OpenCode Zen grants its free models one at a time, so other free models may be refused; paid models always work."
+                    dropdownPosition="bottom"
+                    withinPortal
+                    allowDeselect={false}
+                    data={getAIFeaturesModelOptions(aiFeaturesProvider)}
+                    value={aiFeaturesModel}
+                    onChange={(next) => next && setAIFeaturesModel(next)}
                   ></Select>
                 </Group>
               ) : (

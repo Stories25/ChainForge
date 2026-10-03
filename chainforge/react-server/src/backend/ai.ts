@@ -10,6 +10,17 @@ import {
 import { ChatHistoryInfo, Dict, TabularDataColType } from "./typing";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { llmResponseDataToString, sampleRandomElements } from "./utils";
+// Generative AI features (the sparkly purple "Generative AI" button on
+// TextFields, Items, TabularData and code-evaluator nodes) run on OpenCode Zen
+// models, addressed through the Zen custom provider. Zen is used because it
+// gates its free models per model and Space Bunny Free is the one that works
+// from any client, so these features need no OpenAI key.
+import {
+  OPENCODE_ZEN_BASE_MODEL,
+  ZEN_PROVIDERS,
+  zenModelDropdownLabel,
+  zenProviderModels,
+} from "../zenModels";
 
 export class AIError extends Error {
   constructor(message: string) {
@@ -21,31 +32,53 @@ export class AIError extends Error {
 // Input and outputs of autofill are both rows of strings.
 export type Row = string;
 
-// The list of LLMs models that can be used with AI features.
-// Bedrock was dropped here when its Claude 3 models reached end-of-life on
-// Bedrock; the provider itself is still available for prompt nodes.
-const AIFeaturesLLMs = [
-  {
-    provider: "OpenAI",
-    small: { value: "gpt-4o-mini", label: "OpenAI GPT4o-mini" },
-    large: { value: "gpt-4o", label: "OpenAI GPT4o" },
-  },
-];
+/** Zen provider (catalogue category) selected by default. */
+export const AI_FEATURES_DEFAULT_PROVIDER = "free";
 
-export function getAIFeaturesModelProviders() {
-  return AIFeaturesLLMs.map((m) => m.provider);
+/** Zen model selected by default. Free, and the free model that works today. */
+export const AI_FEATURES_DEFAULT_MODEL = "space-bunny-free";
+
+/** Provider labels for the "provider" dropdown, in ZEN_PROVIDERS order. */
+export function getAIFeaturesModelProviders(): string[] {
+  return ZEN_PROVIDERS.map((p) => p.label);
 }
 
-export function getAIFeaturesModels(provider: string): {
+/**
+ * Resolves a provider label to its catalogue category. Falls back to the
+ * default provider so a stale stored label cannot break the dropdowns.
+ */
+const providerCategory = (provider: string): string =>
+  ZEN_PROVIDERS.find((p) => p.label === provider)?.category ??
+  AI_FEATURES_DEFAULT_PROVIDER;
+
+/** Options for the "model" dropdown: the chosen provider's models, newest first. */
+export function getAIFeaturesModelOptions(
+  provider: string,
+): { value: string; label: string }[] {
+  return zenProviderModels(providerCategory(provider)).map((m) => ({
+    value: m.id,
+    label: zenModelDropdownLabel(m.id),
+  }));
+}
+
+/** The ChainForge model address for a Zen model id. */
+export function getAIFeaturesModelAddress(model: string): string {
+  return `${OPENCODE_ZEN_BASE_MODEL}/${model || AI_FEATURES_DEFAULT_MODEL}`;
+}
+
+/**
+ * The model(s) generative AI features call.
+ *
+ * Both slots return the same address. The pickers give one provider + model
+ * pair, so there is no longer a separate "small" and "large" model; the two
+ * names are kept so the existing call sites keep compiling.
+ */
+export function getAIFeaturesModels(model: string): {
   small: string;
   large: string;
 } {
-  const model =
-    AIFeaturesLLMs.find((m) => m.provider === provider) ?? AIFeaturesLLMs[0];
-  return {
-    small: model.small.value,
-    large: model.large.value,
-  };
+  const address = getAIFeaturesModelAddress(model);
+  return { small: address, large: address };
 }
 
 /**
@@ -267,7 +300,7 @@ function decodeTable(mdText: string): { cols: string[]; rows: Row[] } {
 export async function autofill(
   input: Row[],
   n: number,
-  provider: string,
+  model: string,
   apiKeys?: Dict,
 ): Promise<Row[]> {
   // hash the arguments to get a unique id
@@ -293,7 +326,7 @@ export async function autofill(
 
   const result = await queryLLM(
     /* id= */ id,
-    /* llm= */ getAIFeaturesModels(provider).small,
+    /* llm= */ getAIFeaturesModels(model).small,
     /* n= */ 1,
     /* prompt= */ encoded,
     /* vars= */ {},
@@ -322,14 +355,14 @@ export async function autofill(
  * Uses an LLM to interpret the pattern from the given table (columns and rows) and generate new rows following the pattern.
  * @param input Object containing the columns and rows of the input table.
  * @param n Number of new rows to generate.
- * @param provider The LLM provider to use.
+ * @param model The Zen model id to query.
  * @param apiKeys API keys required for the LLM query.
  * @returns A promise resolving to an object containing updated columns and rows.
  */
 export async function autofillTable(
   input: { cols: string[]; rows: Row[] },
   n: number,
-  provider: string,
+  model: string,
   apiKeys: Dict,
 ): Promise<{ cols: string[]; rows: Row[] }> {
   // Get a random sample of the table rows, if there are more than 30 (as an estimate):
@@ -359,7 +392,7 @@ export async function autofillTable(
     // Query the LLM
     const result = await queryLLM(
       id,
-      getAIFeaturesModels(provider).small,
+      getAIFeaturesModels(model).small,
       1,
       encoded,
       {},
@@ -393,7 +426,7 @@ export async function autofillTable(
 async function fillMissingFieldForRow(
   existingRowData: Record<string, string>, // Key-value pairs for the row
   prompt: string, // The user prompt describing what the missing field should be
-  provider: string,
+  model: string,
   apiKeys: Dict,
 ): Promise<string> {
   // Generate a user prompt for the LLM pass over existing row data in list format
@@ -426,7 +459,7 @@ ${prompt}: ?`;
 
   const result = await queryLLM(
     id,
-    getAIFeaturesModels(provider).small,
+    getAIFeaturesModels(model).small,
     1,
     userPrompt,
     {},
@@ -452,14 +485,14 @@ ${prompt}: ?`;
 /**
  * Uses an LLM to generate one new column with data based on the pattern explained in `prompt`.
  * @param prompt Description or pattern for the column content.
- * @param provider The LLM provider to use (e.g., OpenAI, Bedrock).
+ * @param model The Zen model id to query.
  * @param apiKeys API keys required for the LLM query.
  * @returns A promise resolving to an array of strings (column values).
  */
 export async function generateColumn(
   tableData: { cols: TabularDataColType[]; rows: string[] },
   prompt: string,
-  provider: string,
+  model: string,
   apiKeys: Dict,
 ): Promise<{ col: string; rows: string[] }> {
   // If the length of the prompt is less than 20 characters, use the prompt
@@ -470,7 +503,7 @@ export async function generateColumn(
   } else {
     const result = await queryLLM(
       JSON.stringify([prompt]),
-      getAIFeaturesModels(provider).small,
+      getAIFeaturesModels(model).small,
       1,
       `You produce column names for a table. The column names must be short, less than 20 characters, and in natural language, like "Column Name." Return only the column name. Generate an appropriate column name for the prompt: "${prompt}"`,
       {},
@@ -510,7 +543,7 @@ export async function generateColumn(
     const newValue = await fillMissingFieldForRow(
       rowData,
       prompt,
-      provider,
+      model,
       apiKeys,
     );
     newColumnValues.push(newValue);
@@ -533,7 +566,7 @@ export async function generateAndReplace(
   prompt: string,
   n: number,
   creative: boolean,
-  provider: string,
+  model: string,
   apiKeys: Dict,
 ): Promise<Row[]> {
   // hash the arguments to get a unique id
@@ -558,7 +591,7 @@ export async function generateAndReplace(
 
   const result = await queryLLM(
     /* id= */ id,
-    /* llm= */ getAIFeaturesModels(provider).small,
+    /* llm= */ getAIFeaturesModels(model).small,
     /* n= */ 1,
     /* prompt= */ input,
     /* vars= */ {},
@@ -581,14 +614,14 @@ export async function generateAndReplace(
  * Uses an LLM to generate a table with `n` rows based on the pattern explained in `prompt`.
  * @param prompt Description or pattern for the table content.
  * @param n Number of rows to generate.
- * @param provider The LLM provider to use.
+ * @param model The Zen model id to query.
  * @param apiKeys API keys required for the LLM query.
  * @returns A promise resolving to an object containing the columns and rows of the generated table.
  */
 export async function generateAndReplaceTable(
   prompt: string,
   n: number,
-  provider: string,
+  model: string,
   apiKeys: Dict,
 ): Promise<{ cols: string[]; rows: Row[] }> {
   // Hash the arguments to get a unique id
@@ -615,7 +648,7 @@ export async function generateAndReplaceTable(
     // Query the LLM
     const result = await queryLLM(
       id,
-      getAIFeaturesModels(provider).small,
+      getAIFeaturesModels(model).small,
       1,
       input,
       {},
