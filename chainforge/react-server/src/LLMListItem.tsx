@@ -7,6 +7,37 @@ import { getTemperatureSpecForModel } from "./ModelSettingSchemas";
 import { Tooltip } from "@mantine/core";
 import { LLMSpec, QueryProgress } from "./backend/typing";
 import { DraggableProvided, DraggableStateSnapshot } from "react-beautiful-dnd";
+import { zenModelInfo, zenModelPriceLabel } from "./zenModels";
+
+/**
+ * Small gray line under the model name showing the model id and its
+ * per-1M-token pricing (OpenCode Zen models only; hidden otherwise).
+ */
+const ModelPriceTag = ({ item }: { item: LLMSpec }) => {
+  const prefix = item.base_model + "/";
+  const model_id =
+    typeof item.model === "string" && item.model.startsWith(prefix)
+      ? item.model.substring(prefix.length)
+      : item.model;
+  const info = typeof model_id === "string" ? zenModelInfo(model_id) : undefined;
+  const price = typeof model_id === "string" ? zenModelPriceLabel(model_id) : "";
+  if (!info && !price) return null;
+  return (
+    <div
+      style={{
+        fontSize: "11px",
+        color: "#888",
+        fontFamily: "var(--font-ui)",
+        marginTop: "1px",
+        textAlign: "start",
+      }}
+    >
+      {model_id}
+      {price ? ` · ${price}` : ""}
+      {info?.protocol ? ` · ${info.protocol}` : ""}
+    </div>
+  );
+};
 
 // == The below function perc2color modified from: ==
 // License: MIT - https://opensource.org/licenses/MIT
@@ -139,6 +170,7 @@ const LLMListItem: React.FC<LLMListItemProps> = ({
             <></>
           )} */}
           </CardHeader>
+          <ModelPriceTag item={item} />
           <LLMItemButtonGroup
             onClickTrash={() =>
               removeCallback && removeCallback(item.key ?? "undefined")
@@ -204,6 +236,7 @@ export const LLMListItemClone: React.FC<LLMListItemProps> = ({
               <></>
             )}
           </CardHeader>
+          <ModelPriceTag item={item} />
           <LLMItemButtonGroup hideTrashIcon={hideTrashIcon} />
         </div>
       </div>

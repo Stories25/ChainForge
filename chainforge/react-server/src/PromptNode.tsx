@@ -1763,6 +1763,15 @@ Soft failing by replacing undefined with empty strings.`,
 
       {promptVariantControls}
 
+      {/* Generic input handle: lets a Text Fields node feed the whole prompt
+          (the prompt text is replaced with the connected text on connect). */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="prompt"
+        style={{ top: "85%", background: "#555" }}
+      />
+
       <Handle
         type="source"
         position={Position.Right}
@@ -1777,7 +1786,7 @@ Soft failing by replacing undefined with empty strings.`,
           nodeId={id}
           startY={hooksY}
           position={Position.Left}
-          ignoreHandles={["__past_chats"]}
+          ignoreHandles={["__past_chats", "prompt"]}
         />
       </Box>
 

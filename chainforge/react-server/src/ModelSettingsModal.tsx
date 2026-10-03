@@ -27,6 +27,14 @@ import {
 import { IconHeart } from "@tabler/icons-react";
 import { APP_IS_RUNNING_LOCALLY } from "./backend/utils";
 import { fetchEnvironAPIKeys } from "./backend/backend";
+import {
+  ZEN_MODEL_CATALOG,
+  ZEN_PROVIDERS,
+  sortZenModelsNewestFirst,
+  zenModelDropdownLabel,
+  zenModelInfo,
+  zenProviderModels,
+} from "./zenModels";
 
 const IS_RUNNING_LOCALLY = APP_IS_RUNNING_LOCALLY();
 
@@ -67,77 +75,213 @@ export const DatalistWidget = (props: WidgetProps) => {
 };
 
 /**
- * Custom widget for the OpenCode Zen model field: a provider-category dropdown
- * that filters a priced model dropdown (categories + per-1M-token pricing are
- * supplied by the provider's settings schema via `ui:options.categories`).
+ * Minimal range widget matching the mock design: just the slider. The live
+ * value is shown next to the field's label (see MockStyleFieldTemplate).
  */
-const ZenModelPickerWidget = (props: WidgetProps) => {
-  const options = (props.uiSchema?.["ui:options"] ?? props.options ?? {}) as {
-    categories?: {
-      id: string;
-      label: string;
-      models: { id: string; label: string; price: string; flag?: string }[];
-    }[];
-  };
-  const categories = options.categories ?? [];
-
-  // Derive the active category from the current model value.
-  const catOf = (modelId: string | undefined) =>
-    categories.find((c) => c.models.some((m) => m.id === modelId));
-  const [catId, setCatId] = useState(
-    () => catOf(props.value)?.id ?? categories[0]?.id ?? "",
+export const MockRangeWidget = (props: WidgetProps) => {
+  const { schema, value, onChange, disabled, readonly, required, id, name } =
+    props;
+  const min = schema.minimum ?? 0;
+  const max = schema.maximum ?? 100;
+  const step = schema.multipleOf ?? 1;
+  return (
+    <input
+      type="range"
+      id={id}
+      name={name}
+      min={min}
+      max={max}
+      step={step}
+      value={typeof value === "number" ? value : min}
+      disabled={disabled}
+      readOnly={readonly}
+      required={required}
+      onChange={(e) => onChange(Number(e.target.value))}
+      style={{
+        width: "100%",
+        accentColor: "#4299e1",
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    />
   );
-  const activeCat = categories.find((c) => c.id === catId) ?? categories[0];
+};
+
+/**
+ * Custom widget for the OpenCode Zen model field (mock A): a read-only display
+ * of the node's currently selected model. Model changes happen on the node's
+ * model list, not in the settings modal.
+ */
+const DisabledModelWidget = (props: WidgetProps) => {
+  return (
+    <Select
+      data={[{ value: props.value ?? "", label: props.value ?? "" }]}
+      value={props.value ?? ""}
+      disabled
+      size="sm"
+      onChange={() => {}}
+    />
+  );
+};
+
+/**
+ * Custom widget for the OpenCode Zen model field: a provider dropdown on top
+ * (OpenAI, Anthropic, Zhipu, ...) that narrows a searchable model dropdown
+ * below it. Models are sorted by release date, newest first, and each is
+ * labelled with its per-1M-token pricing. Selecting a model updates the
+ * node's model on submit.
+ */
+const ZenModelWidget = (props: WidgetProps) => {
+  const value = (props.value as string) ?? "";
+  const info = zenModelInfo(value);
+
+  // The provider follows the current model's catalogue category; an empty
+  // value defaults to the first provider.
+  const activeProvider =
+    info?.category ?? (value === "" ? ZEN_PROVIDERS[0].category : null);
+
+  const models = activeProvider
+    ? zenProviderModels(activeProvider)
+    : sortZenModelsNewestFirst(ZEN_MODEL_CATALOG);
+  const modelData = models.map((m) => ({
+    value: m.id,
+    label: zenModelDropdownLabel(m.id),
+  }));
+  // Keep an out-of-catalogue value visible and selectable.
+  if (value && !info) modelData.unshift({ value, label: value });
 
   return (
     <div>
       <Select
-        label="Provider category"
-        description="Groups models by their upstream provider"
-        data={categories.map((c) => ({ value: c.id, label: c.label }))}
-        value={activeCat?.id ?? ""}
-        onChange={(newCat) => {
-          setCatId(newCat ?? "");
-          // Snap the model to the new category's first model, since the
-          // previous selection is no longer visible:
-          const cat = categories.find((c) => c.id === newCat);
-          if (cat && !cat.models.some((m) => m.id === props.value))
-            props.onChange(cat.models[0]?.id ?? undefined);
-        }}
+        label="Provider"
+        data={ZEN_PROVIDERS.map((p) => ({
+          value: p.category,
+          label: p.label,
+        }))}
+        value={activeProvider}
+        placeholder="Select a provider"
         size="sm"
+        onChange={(category) => {
+          // Switching providers jumps to that provider's newest model.
+          const newest = category ? zenProviderModels(category)[0] : undefined;
+          if (newest) props.onChange(newest.id);
+        }}
       />
       <Select
         label="Model"
-        data={(activeCat?.models ?? []).map((m) => ({
-          value: m.id,
-          label: `${m.label}${m.flag ? ` (${m.flag.toLowerCase()})` : ""} · ${m.price}`,
-        }))}
-        value={props.value ?? ""}
-        onChange={(newModel) => props.onChange(newModel ?? undefined)}
-        size="sm"
+        data={modelData}
+        value={value}
         searchable
-        nothingFound="No models found"
-        mb="sm"
+        size="sm"
+        mt={10}
+        onChange={(v) => props.onChange(v ?? "")}
       />
     </div>
   );
 };
 
+/**
+ * Textarea widget matching the mock design: monospace, dark, resizable.
+ */
+export const MockTextareaWidget = (props: WidgetProps) => {
+  const {
+    id,
+    value,
+    required,
+    disabled,
+    readonly,
+    autofocus,
+    onChange,
+    options,
+    placeholder,
+  } = props;
+  return (
+    <textarea
+      id={id}
+      value={value ?? ""}
+      placeholder={placeholder}
+      required={required}
+      disabled={disabled}
+      readOnly={readonly}
+      // eslint-disable-next-line jsx-a11y/no-autofocus
+      autoFocus={autofocus}
+      rows={3}
+      onChange={(e) =>
+        onChange(e.target.value === "" ? options.emptyValue : e.target.value)
+      }
+      style={{
+        width: "100%",
+        minHeight: "64px",
+        resize: "vertical",
+        background: "var(--panel, #1e1e2e)",
+        border: "1px solid var(--border-color, #555)",
+        borderRadius: "6px",
+        color: "inherit",
+        padding: "7px 10px",
+        fontSize: "13px",
+        fontFamily: 'Consolas, "Cascadia Code", monospace',
+      }}
+    />
+  );
+};
+
 const widgets = {
   datalist: DatalistWidget,
-  zenModelPicker: ZenModelPickerWidget,
+  disabledModel: DisabledModelWidget,
+  zenModel: ZenModelWidget,
+  range: MockRangeWidget,
+  textarea: MockTextareaWidget,
 };
 
 /**
  * Field template matching the mock design: each setting renders as a block of
  * [label → control → help text], with the help text drawn from the schema's
- * description. Fields whose widget is "hidden" render nothing.
+ * description (plus any ui:help supplement). Fields whose widget is "hidden"
+ * render nothing.
+ *
+ * Mock extras:
+ *  - Range fields show their live value in monospace next to the label.
+ *  - Textarea fields show a live char count ahead of the help text.
  */
 const MockStyleFieldTemplate = (props: FieldTemplateProps) => {
-  const { id, label, help, required, children, displayLabel, schema, errors } =
-    props;
+  const {
+    id,
+    label,
+    help,
+    rawHelp,
+    required,
+    children,
+    displayLabel,
+    schema,
+    errors,
+    formData,
+    uiSchema,
+  } = props;
   if (schema?.["ui:widget"] === "hidden" || !displayLabel)
     return <>{children}</>;
+
+  const widget = uiSchema?.["ui:widget"];
+
+  // Live value for range fields, e.g. "temperature 0.7" in the label row.
+  const rangeValue =
+    widget === "range" && typeof formData === "number"
+      ? String(formData)
+      : undefined;
+
+  // Live char count for textarea fields, e.g. "68 chars · <help>".
+  const charCount =
+    widget === "textarea" && typeof formData === "string"
+      ? formData.length
+      : undefined;
+
+  // Help text: the schema's description, supplemented by any ui:help. (rjsf
+  // only surfaces ui:help here, but the mock draws the full description.)
+  const helpParts: string[] = [];
+  if (typeof schema.description === "string" && schema.description)
+    helpParts.push(schema.description);
+  if (typeof rawHelp === "string" && rawHelp && !helpParts.includes(rawHelp))
+    helpParts.push(rawHelp);
+  const helpText = helpParts.join(" ");
+
   return (
     <div style={{ marginBottom: "16px" }}>
       <label
@@ -150,10 +294,23 @@ const MockStyleFieldTemplate = (props: FieldTemplateProps) => {
         }}
       >
         {label}
+        {rangeValue !== undefined && (
+          <span
+            style={{
+              fontFamily: "Consolas, monospace",
+              fontWeight: 400,
+              fontSize: "12px",
+              color: "#4299e1",
+              marginLeft: "8px",
+            }}
+          >
+            {rangeValue}
+          </span>
+        )}
         {required && <span style={{ color: "#e46161" }}> *</span>}
       </label>
       {children}
-      {help && (
+      {(helpText.length > 0 || help) && (
         <div
           style={{
             fontSize: "12px",
@@ -162,7 +319,21 @@ const MockStyleFieldTemplate = (props: FieldTemplateProps) => {
             opacity: 0.85,
           }}
         >
-          {help}
+          {charCount !== undefined ? (
+            <>
+              {helpText.length > 0 ? (
+                <>
+                  {charCount} chars · {helpText}
+                </>
+              ) : (
+                <>{charCount} chars</>
+              )}
+            </>
+          ) : helpText.length > 0 ? (
+            <>{helpText}</>
+          ) : (
+            help
+          )}
         </div>
       )}
       {errors}
@@ -216,6 +387,21 @@ const ModelSettingsModal = forwardRef<
   // from the environment. Null when the key is present (or unknown).
   const [missingAPIKeyEnv, setMissingAPIKeyEnv] = useState<string | null>(null);
 
+  // Mock C: the user can paste an API key for this session; it travels with
+  // the call kwargs (api_key) instead of the environment.
+  const [pastedAPIKey, setPastedAPIKey] = useState<string>("");
+
+  // Fixed base URL the provider always targets, if it declares one. Shown
+  // (disabled) in the missing-key state, like the mock.
+  const [baseUrlDisplay, setBaseUrlDisplay] = useState<string | undefined>(
+    undefined,
+  );
+
+  // A pasted key enables Submit/Favorite once it looks plausible (mock C:
+  // at least 4 characters).
+  const pastedAPIKeyValid =
+    missingAPIKeyEnv !== null && pastedAPIKey.trim().length >= 4;
+
   // Check whether the provider's declared API key is set in the environment
   // (mirrors the missing-API-key mock state). Only possible when running
   // locally, where the Flask server can read the environment. The endpoint
@@ -248,6 +434,8 @@ const ModelSettingsModal = forwardRef<
   useEffect(() => {
     if (model && model.base_model) {
       setModelEmoji(model.emoji);
+      setPastedAPIKey("");
+      setBaseUrlDisplay(undefined);
       if (!(model.base_model in ModelSettings)) {
         setSchema({
           type: "object",
@@ -261,9 +449,10 @@ const ModelSettingsModal = forwardRef<
       }
       const settingsSpec = ModelSettings[model.base_model];
       const schema = settingsSpec.schema;
+      setBaseUrlDisplay(settingsSpec.base_url);
       setSchema(schema);
       setUISchema(settingsSpec.uiSchema);
-      setBaseModelName(settingsSpec.fullName);
+      setBaseModelName(settingsSpec.fullName.replace(" (custom provider)", ""));
 
       // If the user has already saved custom settings...
       if (model.formData) {
@@ -295,9 +484,15 @@ const ModelSettingsModal = forwardRef<
   const postprocess = useCallback(
     (fdata: FormData) => {
       if (model === undefined) return {};
-      return postProcessFormData(ModelSettings[model.base_model], fdata ?? {});
+      const settings_data = postProcessFormData(
+        ModelSettings[model.base_model],
+        fdata ?? {},
+      );
+      // A key pasted for this session (mock C) rides along with the kwargs.
+      if (pastedAPIKeyValid) settings_data.api_key = pastedAPIKey.trim();
+      return settings_data;
     },
-    [model],
+    [model, pastedAPIKeyValid, pastedAPIKey],
   );
 
   const saveFormState = useCallback(
@@ -394,6 +589,9 @@ const ModelSettingsModal = forwardRef<
     trigger,
   }));
 
+  // Custom providers get the mock's green provider name + SCHEMA v2 badge.
+  const isCustomProvider = !!model?.base_model?.startsWith("__custom");
+
   return (
     <Modal.Root size="lg" opened={opened} onClose={() => onClickSubmit(false)}>
       <Modal.Overlay />
@@ -430,7 +628,31 @@ const ModelSettingsModal = forwardRef<
                   />
                 </Popover.Dropdown>
               </Popover>
-              <span>{`Model Settings: ${baseModelName}`}</span>
+              <span>
+                {"Model Settings: "}
+                <span
+                  style={isCustomProvider ? { color: "#7ee2a8" } : undefined}
+                >
+                  {baseModelName}
+                </span>
+              </span>
+              {isCustomProvider && (
+                <span
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    letterSpacing: "0.4px",
+                    padding: "1px 7px",
+                    borderRadius: "8px",
+                    marginLeft: "8px",
+                    background: "rgba(126,226,168,0.15)",
+                    color: "#7ee2a8",
+                    border: "1px solid rgba(126,226,168,0.4)",
+                  }}
+                >
+                  SCHEMA v2
+                </span>
+              )}
             </div>
           </Modal.Title>
 
@@ -458,8 +680,91 @@ const ModelSettingsModal = forwardRef<
               {" or a project-root "}
               <code>.env</code>
               {
-                " file, then restart ChainForge. Submit is disabled until the key is found; opening settings for the provider after saving the key will clear this warning."
+                " file, then restart ChainForge — or paste the key below for this session. Opening settings for the provider after saving the key will clear this warning."
               }
+            </div>
+          )}
+          {missingAPIKeyEnv && (
+            <div style={{ marginBottom: "16px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 600,
+                  fontSize: "13px",
+                  marginBottom: "6px",
+                }}
+              >
+                {missingAPIKeyEnv}
+              </label>
+              <input
+                type="password"
+                value={pastedAPIKey}
+                placeholder={`Paste ${missingAPIKeyEnv} for this session`}
+                onChange={(e) => setPastedAPIKey(e.target.value)}
+                style={{
+                  width: "100%",
+                  background: "var(--panel, #1e1e2e)",
+                  border: "1px solid var(--border-color, #555)",
+                  borderRadius: "6px",
+                  color: "inherit",
+                  padding: "7px 10px",
+                  fontSize: "13px",
+                  fontFamily: "inherit",
+                }}
+              />
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "var(--tooltip-text-color, #aaa)",
+                  marginTop: "4px",
+                  opacity: 0.85,
+                }}
+              >
+                {
+                  "Read from the environment (auto-loaded from a project-root .env file) or paste it here for this session. Submit unlocks once the key looks valid."
+                }
+              </div>
+            </div>
+          )}
+          {missingAPIKeyEnv && baseUrlDisplay && (
+            <div style={{ marginBottom: "16px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 600,
+                  fontSize: "13px",
+                  marginBottom: "6px",
+                }}
+              >
+                Base URL (fixed)
+              </label>
+              <input
+                type="text"
+                value={baseUrlDisplay}
+                disabled
+                style={{
+                  width: "100%",
+                  background: "var(--panel, #1e1e2e)",
+                  border: "1px solid var(--border-color, #555)",
+                  borderRadius: "6px",
+                  color: "var(--tooltip-text-color, #aaa)",
+                  padding: "7px 10px",
+                  fontSize: "13px",
+                  fontFamily: "Consolas, monospace",
+                }}
+              />
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "var(--tooltip-text-color, #aaa)",
+                  marginTop: "4px",
+                  opacity: 0.85,
+                }}
+              >
+                {
+                  "Hard-coded in the provider: the client always targets this endpoint — no per-user override, by design."
+                }
+              </div>
             </div>
           )}
           <Form
@@ -490,7 +795,7 @@ const ModelSettingsModal = forwardRef<
                     variant="outline"
                     size="xs"
                     color="gray"
-                    disabled={!!missingAPIKeyEnv}
+                    disabled={!!missingAPIKeyEnv && !pastedAPIKeyValid}
                     rightIcon={<IconHeart size="12pt" />}
                     onClick={() => {
                       // Submit the form and make the saved model settings a favorite
@@ -503,7 +808,7 @@ const ModelSettingsModal = forwardRef<
               )}
               <Button
                 title="Submit"
-                disabled={!!missingAPIKeyEnv}
+                disabled={!!missingAPIKeyEnv && !pastedAPIKeyValid}
                 onClick={() => onClickSubmit(false)}
               >
                 Submit

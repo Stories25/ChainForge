@@ -31,10 +31,12 @@ import {
   OPENROUTER_IMAGE_PREFIX,
   OPENROUTER_PREFIX,
 } from "./backend/models";
-import useStore, {
-  initLLMProviderMenu,
-  disabledLLMProviderMenu,
-} from "./store";
+import useStore, { initLLMProviderMenu } from "./store";
+import {
+  ZEN_PROVIDERS,
+  makeZenModelSpec,
+  zenProviderModels,
+} from "./zenModels";
 import { Dict, JSONCompatible, LLMGroup, LLMSpec } from "./backend/typing";
 import { ContextMenuItemOptions } from "mantine-contextmenu/dist/types";
 import { deepcopy, ensureUniqueName } from "./backend/utils";
@@ -506,16 +508,24 @@ export const LLMListContainer = forwardRef<
     };
     const res = initLLMProviderMenu.map((i) => convert(i));
 
-    // Legacy providers, disabled now that OpenCode Zen is the sole backbone.
-    // Rendered grayed out and unclickable at the bottom of the picker.
-    disabledLLMProviderMenu.forEach((d) =>
-      res.push({
-        key: d.key,
-        title: d.title,
-        disabled: true,
-        onClick: undefined,
-      } as NestedMenuItemProps),
-    );
+    // OpenCode Zen powers every provider below, so they are all enabled:
+    // each expands into a submenu of its Zen models, sorted by release date
+    // (newest first). The Zen backbone itself is covered by these groups, so
+    // the flat "OpenCode Zen" entry is absorbed (convert() marks its
+    // base_model as seen, and the AvailableLLMs loop below skips it).
+    // Providers OpenCode doesn't carry (e.g. Hugging Face, Ollama) are no
+    // longer listed at all.
+    ZEN_PROVIDERS.forEach((provider) => {
+      res.push(
+        convert({
+          group: provider.label,
+          emoji: provider.emoji,
+          items: zenProviderModels(provider.category).map((m) =>
+            makeZenModelSpec(m, provider.emoji),
+          ),
+        }),
+      );
+    });
 
     for (const item of AvailableLLMs) {
       if (initModels.has(item.base_model)) {

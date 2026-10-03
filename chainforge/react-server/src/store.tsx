@@ -101,28 +101,10 @@ const refreshableOutputNodeTypes = new Set([
  * The provider menu is restricted to OpenCode Zen: it is the sole supported
  * backbone. Its models come from the backend's ProviderRegistry at startup
  * (via `setCustomProviders`), which appends them to the picker dynamically.
+ * The Add + menu itself is built from the Zen catalogue in zenModels.ts,
+ * grouped by provider (OpenAI, Anthropic, Zhipu, ...).
  */
 export const initLLMProviderMenu: (LLMSpec | LLMGroup)[] = [];
-
-/**
- * Legacy providers, disabled now that OpenCode Zen is the only backbone.
- * Shown grayed out (unclickable) in the model picker; flows that still use
- * them keep their saved settings but cannot run.
- */
-export const disabledLLMProviderMenu: { key: string; title: string }[] = [
-  { key: "webllm", title: "🌐 In-browser LLMs" },
-  { key: "openrouter", title: "🔀 OpenRouter" },
-  { key: "openai", title: "🤖 OpenAI" },
-  { key: "anthropic", title: "🎭 Anthropic (Claude)" },
-  { key: "google", title: "✨ Google AI (Gemini)" },
-  { key: "azure", title: "☁️ Azure OpenAI" },
-  { key: "hf", title: "🤗 Hugging Face" },
-  { key: "ollama", title: "🦙 Ollama" },
-  { key: "bedrock", title: "🌨️ Amazon Bedrock" },
-  { key: "together", title: "🤝 Together Chat" },
-  { key: "deepseek", title: "🐋 DeepSeek" },
-  { key: "minimax", title: "🪶 MiniMax" },
-];
 
 function flattenLLMGroup(group: LLMGroup): LLMSpec[] {
   return group.items.flatMap((item) =>
@@ -859,6 +841,22 @@ const useStore = create<StoreHandles>((set, get) => ({
       ? get().getNode(connection.target)
       : undefined;
     if (target === undefined) return;
+
+    // Connecting a Text Fields node to a Prompt node's generic 'prompt'
+    // handle feeds the text into the prompt body directly.
+    if (
+      target.type === "prompt" &&
+      typeof connection.targetHandle === "string" &&
+      connection.targetHandle === "prompt"
+    ) {
+      const source = connection.source
+        ? get().getNode(connection.source)
+        : undefined;
+      const text = source?.data?.text;
+      if (typeof text === "string" && text.length > 0) {
+        get().setDataPropsForNode(target.id, { prompt: text });
+      }
+    }
 
     if (
       target.type === "vis" ||

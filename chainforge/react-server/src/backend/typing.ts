@@ -203,6 +203,8 @@ export type CustomLLMProviderSpec = {
     ui: Dict<Dict<JSONCompatible>>;
     /** Environment variable (or .env key) holding this provider's API key. */
     api_key_env?: string;
+    /** Fixed base URL the provider always targets (shown when the key is missing). */
+    base_url?: string;
   };
   category?: string;
 };
@@ -223,6 +225,8 @@ export interface ModelSettingsDict {
   postprocessors: Dict<(val: string | number | boolean) => any>;
   /** Env var holding the API key, if the provider declared one. */
   api_key_env?: string;
+  /** Fixed base URL the provider always targets, if declared. */
+  base_url?: string;
 }
 
 /** Standard properties that every LLM response object must have. */

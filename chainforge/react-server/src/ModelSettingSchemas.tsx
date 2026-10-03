@@ -2319,7 +2319,166 @@ export const WebLLMSettings: ModelSettingsDict = {
 };
 
 // A lookup table indexed by base_model.
+/**
+ * Fallback settings for the bundled OpenCode Zen provider. New prompt nodes
+ * default to this backbone (base_model `__custom/OpenCode Zen`), and this
+ * entry guarantees the settings modal renders correctly even before — or if —
+ * the backend's provider registry loads the live spec. When the backend does
+ * load the real provider, setCustomProvider overwrites this entry.
+ *
+ * Mirrors OPENCODE_SETTINGS_SCHEMA in chainforge/examples/custom_provider_opencode.py.
+ */
+const OpenCodeZenFallbackSettings: ModelSettingsDict = {
+  fullName: "OpenCode Zen (custom provider)",
+  api_key_env: "OPENCODE_API_KEY",
+  base_url: "https://opencode.ai/zen/v1",
+  schema: {
+    type: "object",
+    required: ["shortname"],
+    properties: {
+      shortname: {
+        type: "string",
+        title: "Nickname",
+        description: "Unique identifier to appear in ChainForge. Keep it short.",
+        default: "OpenCode Zen",
+      },
+      model: {
+        type: "string",
+        title: "Model",
+        description:
+          "The OpenCode Zen model to query. Change from the node's model list.",
+        default: "gpt-5.5",
+      },
+      system_msg: {
+        type: "string",
+        title: "system_message",
+        description:
+          "Sent as the system-role message ahead of the user prompt. Leave empty to send no system message. Overridden at run time when a {system_prompt} template variable is connected to the node.",
+        default: "",
+        allow_empty_str: true,
+      },
+      reasoning_effort: {
+        type: "string",
+        title: "reasoning_effort",
+        description:
+          "How much thinking the model should do before answering. Low = fastest and cheapest; high = deepest reasoning. Sent through to the Zen gateway for models that support it; ignored gracefully by those that don't.",
+        enum: ["low", "medium", "high"],
+        default: "medium",
+      },
+      temperature: {
+        type: "number",
+        title: "temperature",
+        description:
+          "Controls the 'creativity' or randomness of the response.",
+        default: 0.7,
+        minimum: 0,
+        maximum: 2,
+        multipleOf: 0.01,
+      },
+      max_tokens: {
+        type: "integer",
+        title: "max_tokens",
+        description: "Maximum number of tokens to generate in the response.",
+        default: 4096,
+        minimum: 1,
+        maximum: 65536,
+      },
+    },
+  },
+  uiSchema: {
+    "ui:submitButtonOptions": UI_SUBMIT_BUTTON_SPEC,
+    shortname: { "ui:autofocus": true },
+    model: {
+      "ui:widget": "zenModel",
+      "ui:help":
+        "Pick any OpenCode Zen model. Prices shown are per 1M tokens (input/output).",
+    },
+    system_msg: { "ui:widget": "textarea" },
+    reasoning_effort: { "ui:help": "Defaults to medium." },
+    temperature: {
+      "ui:help": "Defaults to 0.7.",
+      "ui:widget": "range",
+    },
+    max_tokens: {
+      "ui:help": "Range 1-65536.",
+      "ui:widget": "range",
+    },
+    "ui:order": [
+      "model",
+      "system_msg",
+      "reasoning_effort",
+      "temperature",
+      "max_tokens",
+      "shortname",
+    ],
+  },
+  postprocessors: {},
+};
+
+/** Fallback settings for the bundled Echo provider (same idea as above). */
+const EchoFallbackSettings: ModelSettingsDict = {
+  fullName: "Echo (custom provider)",
+  api_key_env: "ECHO_API_KEY",
+  base_url: "https://echo.fulcrum.inc/api/v1",
+  schema: {
+    type: "object",
+    required: ["shortname"],
+    properties: {
+      shortname: {
+        type: "string",
+        title: "Nickname",
+        description: "Unique identifier to appear in ChainForge. Keep it short.",
+        default: "Echo",
+      },
+      model: {
+        type: "string",
+        title: "Model",
+        description: "The Echo model to query (currently only 'echo').",
+        default: "echo",
+      },
+      persona: {
+        type: "string",
+        title: "Persona",
+        description: "The writer Echo writes as (required by the Echo API).",
+        default: "Emily Dickinson",
+      },
+      temperature: {
+        type: "number",
+        title: "temperature",
+        description:
+          "Higher values give more creative, less predictable responses.",
+        default: 1.0,
+        minimum: 0,
+        maximum: 2,
+        multipleOf: 0.01,
+      },
+      max_tokens: {
+        type: "integer",
+        title: "max_tokens",
+        description: "Upper limit on the tokens generated in the response.",
+        default: 4096,
+        minimum: 1,
+        maximum: 65536,
+      },
+    },
+  },
+  uiSchema: {
+    "ui:submitButtonOptions": UI_SUBMIT_BUTTON_SPEC,
+    shortname: { "ui:autofocus": true },
+    model: { "ui:widget": "disabledModel" },
+    persona: {
+      "ui:help":
+        'Required by Echo, e.g. "Emily Dickinson" — names the writer Echo writes as.',
+    },
+    temperature: { "ui:widget": "range" },
+    max_tokens: { "ui:widget": "range" },
+  },
+  postprocessors: {},
+};
+
 export const ModelSettings: Dict<ModelSettingsDict> = {
+  "__custom/OpenCode Zen": OpenCodeZenFallbackSettings,
+  "__custom/Echo": EchoFallbackSettings,
   "gpt-3.5-turbo": ChatGPTSettings,
   "gpt-4": GPT4Settings,
   "dall-e": DalleSettings,
@@ -2557,6 +2716,10 @@ export const setCustomProvider = (
     // modal uses this to warn when the key is missing (mock C state).
     if (settings_schema.api_key_env)
       compiled_schema.api_key_env = settings_schema.api_key_env;
+    // A fixed base URL, if declared. The modal shows it (disabled) in the
+    // missing-key state.
+    if (settings_schema.base_url)
+      compiled_schema.base_url = settings_schema.base_url;
   }
 
   // Check for a default temperature
