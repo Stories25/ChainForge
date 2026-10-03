@@ -188,3 +188,33 @@ chainforge_assets/
 **/bun.lock
 # Local Claude Code dev-server config: points at machine-specific paths.
 .claude/launch.json
+
+# == Project-specific ==
+# Kept outside the generated python block above so the toptal generator can
+# still overwrite its own section.
+
+# Node dependencies. The repo root holds the @opencode-ai/sdk dependency that
+# chainforge/examples/opencode_bridge.mjs imports. The react-server copy is
+# already covered by chainforge/react-server/.gitignore.
+node_modules/
+
+# npm / bun runtime noise
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+
+# Runtime files of the OpenCode bridge (opencode_bridge.mjs). It writes these to
+# the OS temp dir; listed here as well in case TMPDIR is ever pointed inside
+# the checkout.
+chainforge-opencode-bridge/
+chainforge-opencode-bridge-*.pid
+
+# OpenCode's per-project state directory. Not opencode.json: that can be a
+# deliberate shared config, so it is left trackable.
+.opencode/
+
+# Editors and OS
+.idea/
+Thumbs.db
+Desktop.ini
