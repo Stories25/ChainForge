@@ -516,10 +516,11 @@
     <h3>Notes from the Zen docs</h3>
     <ul class="tight">
       <li><b>Free models</b> (highlighted rows) are free for a limited time while teams collect feedback; <i>Big Pickle</i> and <i>Space Bunny Free</i> are stealth models — Space Bunny's provider follows a zero-retention policy.</li>
+      <li><b>The free tier is granted per model, not per client.</b> A direct HTTP call to <code>opencode.ai/zen/v1</code> is refused with <code>403 FreeTierError — OpenCode's free tier can only be used from within OpenCode</code>. The message is misleading: capturing the real <code>opencode</code> CLI shows byte-identical requests — same key, same <code>x-opencode-client</code>, same user agent, same endpoint — being answered <code>200</code> for <code>space-bunny-free</code> and <code>403</code> for <code>longcat-2.5-preview-free</code> and <code>big-pickle</code>. Only the <code>model</code> field differs, so the gate is server-side. The provider still defaults to <b>transport = <code>sdk</code></b>, because that is the only supported way in and it also removes the protocol routing below.</li>
       <li><b>Jev 1.13</b> (TypeSafe / System One) is a structured-decision model: it returns values and probabilities, not text, on a dedicated <code>/v1/systemone</code> endpoint.</li>
       <li><b>Tiered pricing:</b> GPT models are priced per context tier (≤ / > 272K tokens); Claude Sonnet 4.5 and Grok per ≤ / > 200K; Gemini 3.1 Pro per ≤ / > 200K. The table shows the base (short-context) rate.</li>
       <li><b>Deprecated:</b> the GPT 5.x Codex family (except GPT 5.3+) was deprecated July 23, 2026; Claude Opus 4.1 (Aug 5, 2026) and Sonnet 4 (Jun 15, 2026) are retired and not listed.</li>
-      <li><b>Endpoints vary by family:</b> OpenAI/Grok → <code>/v1/responses</code>, Anthropic/Qwen-Flash → <code>/v1/messages</code>, open-compatible models → <code>/v1/chat/completions</code>. The ChainForge example provider pins <code>/v1/chat/completions</code>; supporting all families properly means routing per-category.</li>
+      <li><b>Endpoints vary by family:</b> OpenAI/Grok → <code>/v1/responses</code>, Anthropic/Qwen-Flash → <code>/v1/messages</code>, open-compatible models → <code>/v1/chat/completions</code>. On <b>transport = <code>direct</code></b> the example provider routes per family itself. On <b>transport = <code>sdk</code></b> (the default) OpenCode picks the endpoint, so the routing table is no longer needed there.</li>
     </ul>
   </section>
 </div>
